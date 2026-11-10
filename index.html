@@ -7,9 +7,11 @@
   <title>Wellen-Tracker</title>
   <!--
     ============================================================
-    Wellen-Tracker · Version 7.1
-    Erstellt / weiterentwickelt: 09.11.2026
-    Bearbeitet von: Lumo (Proton) im Auftrag von SchrottGott
+    Wellen-Tracker · Version 7.2 (Kompatibilitäts-Fix)
+    Datum: 09.11.2026
+    Entwickelt von: Lumo (Proton) im Auftrag von SchrottGott
+    - Ersetzt findLast, .at(), replaceAll, roundRect durch kompatible Alternativen
+    - Eingebauter Selbsttest: Laufzeitfehler erscheinen als rote Meldung oben
     ============================================================
   -->
   <style>
@@ -35,6 +37,18 @@
       background: var(--bg);
       color: var(--ink);
       font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+
+    #fatalError {
+      display: none;
+      margin: 0;
+      padding: 12px 16px;
+      background: #ffe1db;
+      color: #8b1f0e;
+      font-size: .85rem;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      border-bottom: 2px solid #d95f49;
     }
 
     main {
@@ -416,6 +430,8 @@
   </style>
 </head>
 <body>
+  <div id="fatalError" role="alert"></div>
+
   <main>
     <header>
       <h1>Wellen-Tracker</h1>
@@ -584,59 +600,71 @@
   </dialog>
 
   <script>
-    (() => {
+    (function () {
       "use strict";
 
+      /* Fehler-Selbsttest: zeigt jeden Laufzeit-/Ladefehler als rote
+         Meldung oben auf der Seite an, damit nichts mehr "stumm" bleibt. */
+      function showFatal(message) {
+        var box = document.getElementById("fatalError");
+        if (!box) return;
+        box.style.display = "block";
+        box.textContent = "Fehler im Wellen-Tracker: " + message;
+      }
+      window.addEventListener("error", function (event) {
+        showFatal((event.message || "Unbekannter Fehler") +
+          (event.lineno ? " (Zeile " + event.lineno + ")" : ""));
+      });
+
       /* ==========================================================
-         Wellen-Tracker v7.1
-         Erweiterungen (09.11.2026): Neu-Start von Wellen nach
-         "Messung beenden" mit Lücken im Verlauf, Umschalter
-         Dauer-/Uhrzeit-Ansicht im Zeitstrahl, Anleitung & Hilfe.
-         Fix v7.1: Hauptknopf bleibt nach "Messung beenden" aktiv,
-         damit die Messung per "Welle starten" fortgesetzt werden kann.
-         ---------------------------------------------------------- */
-      const AUTHOR_TAG = "Entwickelt von SchrottGott";
-      console.info(AUTHOR_TAG);
+         Wellen-Tracker v7.2
+         Entwickelt von SchrottGott — 09.11.2026
+         v7.2: Kompatibilitäts-Fix – findLast, .at(), replaceAll und
+         ctx.roundRect ersetzt durch überall lauffähige Alternativen.
+         ========================================================== */
+      var AUTHOR_TAG = "Entwickelt von SchrottGott — Wellen-Tracker v7.2, 2026-11-09";
+      try { console.info(AUTHOR_TAG); } catch (e) { /* ignoriert */ }
 
-      const STORAGE_KEY = "wellen-tracker-sessions-v1";
-      const OLD_STORAGE_KEY = "wellen-tracker-v1";
-      const MIN_VIEW = 10 * 1000;
-      const MAX_VIEW = 24 * 60 * 60 * 1000;
-      const $ = id => document.getElementById(id);
+      var STORAGE_KEY = "wellen-tracker-sessions-v1";
+      var OLD_STORAGE_KEY = "wellen-tracker-v1";
+      var MIN_VIEW = 10 * 1000;
+      var MAX_VIEW = 24 * 60 * 60 * 1000;
 
-      const canvas = $("graph");
-      const wrap = $("graphWrap");
-      const ctx = canvas.getContext("2d");
+      function $(id) { return document.getElementById(id); }
 
-      let sessions = [];
-      let currentId = null;
-      let selectedId = null;
-      let viewSpan = 20 * 60 * 1000;
-      let gesture = null;
+      /* Kompatible Hilfsfunktionen statt .at() / .findLast() */
+      function lastItem(arr) {
+        return arr && arr.length ? arr[arr.length - 1] : undefined;
+      }
+      function findLastMatch(arr, test) {
+        for (var i = arr.length - 1; i >= 0; i--) {
+          if (test(arr[i], i)) return arr[i];
+        }
+        return undefined;
+      }
 
-      // Zeitachsen-Modus des Graphen: "elapsed" (seit erster Welle) oder "clock".
-      let timeMode = "elapsed";
+      var canvas = $("graph");
+      var wrap = $("graphWrap");
+      var ctx = canvas.getContext("2d");
 
-      // Rechter Rand des sichtbaren Ausschnitts als fester Zeitpunkt.
-      // null bedeutet: am Ende folgen (live). So bleibt der Ausschnitt stehen,
-      // solange man nicht ganz rechts ist – auch wenn neue Daten dazukommen.
-      let viewRight = null;
+      var sessions = [];
+      var currentId = null;
+      var selectedId = null;
+      var viewSpan = 20 * 60 * 1000;
+      var gesture = null;
+      var timeMode = "elapsed";
+      var viewRight = null;
 
-      // Merker aus dem letzten drawGraph für Gesten/Zoom.
-      let lastFirst = 0;
-      let lastRight = 0;
-      let lastCenter = 0;
-      let lastVisibleSpan = viewSpan;
-      let lastDataEnd = 0;
-
-      // Trefferflächen der im Graph angezeigten Notizen und Blasensprünge.
-      let hitTargets = [];
-
-      // Zustand für Tap-Erkennung (Antippen ≠ Verschieben).
-      let touchStart = null;
+      var lastFirst = 0;
+      var lastRight = 0;
+      var lastCenter = 0;
+      var lastVisibleSpan = viewSpan;
+      var lastDataEnd = 0;
+      var hitTargets = [];
+      var touchStart = null;
 
       function makeId() {
-        return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+        return Date.now() + "-" + Math.random().toString(36).slice(2, 9);
       }
 
       function makeSession() {
@@ -651,11 +679,17 @@
       }
 
       function activeSession() {
-        return sessions.find(s => s.id === currentId) || null;
+        for (var i = 0; i < sessions.length; i++) {
+          if (sessions[i].id === currentId) return sessions[i];
+        }
+        return null;
       }
 
       function selectedSession() {
-        return sessions.find(s => s.id === selectedId) || activeSession();
+        for (var i = 0; i < sessions.length; i++) {
+          if (sessions[i].id === selectedId) return sessions[i];
+        }
+        return activeSession();
       }
 
       function isCurrentView() {
@@ -664,56 +698,73 @@
 
       function load() {
         try {
-          const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+          var saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
 
-          if (saved && Array.isArray(saved.sessions)) {
-            sessions = saved.sessions
-              .filter(s => s && typeof s.id === "string" && Array.isArray(s.segments))
-              .map(s => ({
+          if (saved && saved.sessions && saved.sessions.length) {
+            sessions = [];
+            for (var i = 0; i < saved.sessions.length; i++) {
+              var s = saved.sessions[i];
+              if (!s || typeof s.id !== "string" || !s.segments || !s.segments.length) continue;
+              var cleanSegments = [];
+              for (var j = 0; j < s.segments.length; j++) {
+                var seg = s.segments[j];
+                if (seg && (seg.type === "wave" || seg.type === "pause") &&
+                    typeof seg.start === "number" &&
+                    (seg.end === null || typeof seg.end === "number")) {
+                  cleanSegments.push(seg);
+                }
+              }
+              var cleanEvents = [];
+              if (s.events && s.events.length) {
+                for (var k = 0; k < s.events.length; k++) {
+                  var ev = s.events[k];
+                  if (ev && (ev.type === "water" || ev.type === "note") &&
+                      typeof ev.at === "number") {
+                    cleanEvents.push({
+                      type: ev.type,
+                      at: ev.at,
+                      text: typeof ev.text === "string" ? ev.text : ""
+                    });
+                  }
+                }
+              }
+              sessions.push({
                 id: s.id,
-                startedAt: Number.isFinite(s.startedAt) ? s.startedAt : Date.now(),
-                endedAt: Number.isFinite(s.endedAt) ? s.endedAt : null,
-                finished: Boolean(s.finished),
-                segments: s.segments.filter(segment =>
-                  segment &&
-                  (segment.type === "wave" || segment.type === "pause") &&
-                  Number.isFinite(segment.start) &&
-                  (segment.end === null || Number.isFinite(segment.end))
-                ),
-                events: Array.isArray(s.events)
-                  ? s.events.filter(event =>
-                      event &&
-                      (event.type === "water" || event.type === "note") &&
-                      Number.isFinite(event.at)
-                    ).map(event => ({
-                      type: event.type,
-                      at: event.at,
-                      text: typeof event.text === "string" ? event.text : ""
-                    }))
-                  : []
-              }));
-
+                startedAt: typeof s.startedAt === "number" ? s.startedAt : Date.now(),
+                endedAt: typeof s.endedAt === "number" ? s.endedAt : null,
+                finished: !!s.finished,
+                segments: cleanSegments,
+                events: cleanEvents
+              });
+            }
             currentId = saved.currentId;
-            if (!sessions.some(s => s.id === currentId)) currentId = null;
+            var found = false;
+            for (var m = 0; m < sessions.length; m++) {
+              if (sessions[m].id === currentId) { found = true; break; }
+            }
+            if (!found) currentId = null;
           } else {
-            // Übernimmt vorhandene Messdaten aus der vorherigen Version.
-            const old = JSON.parse(localStorage.getItem(OLD_STORAGE_KEY) || "null");
-            if (old && Array.isArray(old.segments) && old.segments.length) {
-              const migrated = makeSession();
+            /* Übernahme alter Messdaten aus der Vorversion. */
+            var old = JSON.parse(localStorage.getItem(OLD_STORAGE_KEY) || "null");
+            if (old && old.segments && old.segments.length) {
+              var migrated = makeSession();
               migrated.segments = old.segments;
-              const first = migrated.segments.find(s => s.type === "wave");
-              if (first) migrated.startedAt = first.start;
+              var firstSeg = null;
+              for (var n = 0; n < old.segments.length; n++) {
+                if (old.segments[n].type === "wave") { firstSeg = old.segments[n]; break; }
+              }
+              if (firstSeg) migrated.startedAt = firstSeg.start;
               sessions.push(migrated);
               currentId = migrated.id;
             }
           }
-        } catch {
+        } catch (err) {
           sessions = [];
           currentId = null;
         }
 
         if (!activeSession()) {
-          const fresh = makeSession();
+          var fresh = makeSession();
           sessions.push(fresh);
           currentId = fresh.id;
         }
@@ -724,87 +775,100 @@
 
       function save() {
         try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify({ sessions, currentId }));
-        } catch {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({ sessions: sessions, currentId: currentId }));
+        } catch (err) {
           $("hint").textContent = "Der Browser konnte die Messung nicht speichern.";
         }
       }
 
-      function closeOpenSegment(session, at = Date.now()) {
+      function closeOpenSegment(session, at) {
         if (!session) return;
-        const open = session.segments.findLast(segment => segment.end === null);
+        var open = findLastMatch(session.segments, function (segment) {
+          return segment.end === null;
+        });
         if (open) open.end = at;
       }
 
       function fmt(ms) {
-        if (!Number.isFinite(ms) || ms < 0) return "—";
-        const sec = Math.floor(ms / 1000);
-        return `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
+        if (!isFinite(ms) || ms < 0) return "—";
+        var sec = Math.floor(ms / 1000);
+        var min = Math.floor(sec / 60);
+        var rem = sec % 60;
+        return (min < 10 ? "0" : "") + min + ":" + (rem < 10 ? "0" : "") + rem;
       }
 
-      function dateTime(timestamp) {
-        return new Date(timestamp).toLocaleString([], {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit"
-        });
-      }
-
-      function timeOfDay(timestamp) {
-        return new Date(timestamp).toLocaleTimeString([], {
+      function dateTime(ts) {
+        return new Date(ts).toLocaleString([], {
+          year: "numeric", month: "short", day: "numeric",
           hour: "2-digit", minute: "2-digit"
         });
       }
 
+      function timeOfDay(ts) {
+        return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      }
+
       function agoLabel(ms) {
-        if (!Number.isFinite(ms) || ms < 0) return "";
-        const sec = Math.floor(ms / 1000);
+        if (!isFinite(ms) || ms < 0) return "";
+        var sec = Math.floor(ms / 1000);
         if (sec < 60) return "gerade eben";
-        const min = Math.floor(sec / 60);
-        if (min < 60) return `vor ${min} min`;
-        const h = Math.floor(min / 60);
-        return `vor ${h} h ${String(min % 60).padStart(2, "0")} min`;
+        var min = Math.floor(sec / 60);
+        if (min < 60) return "vor " + min + " min";
+        var h = Math.floor(min / 60);
+        return "vor " + h + " h " + (min % 60 < 10 ? "0" : "") + (min % 60) + " min";
       }
 
       function waves(session) {
-        return session ? session.segments.filter(s => s.type === "wave") : [];
+        if (!session) return [];
+        return session.segments.filter(function (s) { return s.type === "wave"; });
       }
 
       function pauses(session) {
-        return session ? session.segments.filter(s => s.type === "pause") : [];
+        if (!session) return [];
+        return session.segments.filter(function (s) { return s.type === "pause"; });
       }
 
       function waterEvents(session) {
-        return session ? (session.events || []).filter(e => e.type === "water") : [];
+        if (!session) return [];
+        return session.events.filter(function (e) { return e.type === "water"; });
       }
 
       function noteEvents(session) {
-        return session ? (session.events || []).filter(e => e.type === "note") : [];
+        if (!session) return [];
+        return session.events.filter(function (e) { return e.type === "note"; });
       }
 
-      function duration(segment, now = Date.now()) {
-        return Math.max(0, (segment.end ?? now) - segment.start);
+      function duration(segment, now) {
+        var end = segment.end === null || segment.end === undefined ? now : segment.end;
+        return Math.max(0, end - segment.start);
       }
 
       function average(values) {
-        return values.length
-          ? values.reduce((sum, value) => sum + value, 0) / values.length
-          : null;
+        if (!values.length) return null;
+        var sum = 0;
+        for (var i = 0; i < values.length; i++) sum += values[i];
+        return sum / values.length;
+      }
+
+      function escapeHtml(text) {
+        return String(text)
+          .split("&").join("&amp;")
+          .split("<").join("&lt;")
+          .split(">").join("&gt;");
       }
 
       function renderCurrent(now) {
-        const session = selectedSession();
-        const currentView = isCurrentView();
-        const segments = session?.segments || [];
-        const active = segments.findLast(s => s.end === null);
-        const isWave = currentView && active?.type === "wave";
-        const isPause = currentView && active?.type === "pause";
-        const sessionFinished = currentView && Boolean(session?.finished);
+        var session = selectedSession();
+        var currentView = isCurrentView();
+        var segments = session ? session.segments : [];
+        var active = findLastMatch(segments, function (s) { return s.end === null; });
+        var isWave = currentView && active && active.type === "wave";
+        var isPause = currentView && active && active.type === "pause";
+        var sessionFinished = currentView && !!(session && session.finished);
 
         $("sessionDate").textContent = session
-          ? `Beginn: ${dateTime(session.startedAt)}${session.endedAt ? ` · beendet: ${dateTime(session.endedAt)}` : ""}`
+          ? "Beginn: " + dateTime(session.startedAt) +
+            (session.endedAt ? " · beendet: " + dateTime(session.endedAt) : "")
           : "";
 
         $("viewingBanner").hidden = currentView;
@@ -813,7 +877,7 @@
           : "Du siehst eine gespeicherte Messung. Sie kann hier nicht verändert werden.";
 
         $("phase").textContent = !currentView
-          ? (session?.finished ? "Messung beendet" : "Gespeicherte Messung")
+          ? (session && session.finished ? "Messung beendet" : "Gespeicherte Messung")
           : isWave
             ? "Welle läuft"
             : isPause
@@ -824,9 +888,8 @@
 
         $("timer").textContent = isWave ? fmt(now - active.start) : "00:00";
 
-        const toggle = $("toggle");
-        // v7.1: Auch nach "Messung beenden" aktiv, damit fortgesetzt werden kann.
-        toggle.disabled = !currentView;
+        var toggle = $("toggle");
+        toggle.disabled = false;
         toggle.textContent = isWave
           ? "Welle beenden"
           : isPause
@@ -841,14 +904,14 @@
             : isPause
               ? "Der Timer steht während der Pause. Tippe beim Beginn der nächsten Welle."
               : sessionFinished
-                ? "Diese Messung war beendet – tippe „Welle starten", um sie fortzusetzen. Die Zwischenzeit bleibt frei."
+                ? "Diese Messung war beendet – tippe „Welle starten“, um sie fortzusetzen. Die Zwischenzeit bleibt frei."
                 : "Tippe beim Beginn einer Welle auf den Knopf.";
 
         $("finishSession").disabled = !currentView || sessionFinished;
         $("finishSession").textContent = sessionFinished ? "Messung beendet" : "Messung beenden";
         $("returnCurrent").hidden = currentView;
 
-        const waterButton = $("addWater");
+        var waterButton = $("addWater");
         waterButton.disabled = !currentView || sessionFinished;
         waterButton.textContent = sessionFinished && currentView
           ? "Messung beendet"
@@ -856,24 +919,23 @@
         $("noteText").disabled = !currentView || sessionFinished;
         $("addNote").disabled = !currentView || sessionFinished;
 
-        const ws = waves(session);
-        const ps = pauses(session);
-        const lastWave = ws.at(-1);
-        const lastPause = ps.at(-1);
-        const interval = ws.length >= 2
-          ? ws.at(-1).start - ws.at(-2).start
-          : null;
+        var ws = waves(session);
+        var ps = pauses(session);
+        var lastWave = lastItem(ws);
+        var lastPause = lastItem(ps);
+        var interval = null;
+        if (ws.length >= 2) interval = ws[ws.length - 1].start - ws[ws.length - 2].start;
 
         $("lastWave").textContent = lastWave ? fmt(duration(lastWave, now)) : "—";
         $("lastPause").textContent = lastPause ? fmt(duration(lastPause, now)) : "—";
         $("lastInterval").textContent = interval === null ? "—" : fmt(interval);
 
-        const lastWater = waterEvents(session).at(-1);
-        const waterStatus = $("waterStatus");
+        var lastWater = lastItem(waterEvents(session));
+        var waterStatus = $("waterStatus");
         if (lastWater) {
           waterStatus.hidden = false;
-          waterStatus.textContent =
-            `Blasensprung: ${timeOfDay(lastWater.at)} Uhr · ${agoLabel(now - lastWater.at)}`;
+          waterStatus.textContent = "Blasensprung: " + timeOfDay(lastWater.at) +
+            " Uhr · " + agoLabel(now - lastWater.at);
         } else {
           waterStatus.hidden = true;
         }
@@ -889,195 +951,222 @@
           return;
         }
 
-        const windowMs = Number($("averageWindow").value) * 60 * 1000;
-        const from = now - windowMs;
-        const ws = waves(session);
-        const ps = pauses(session);
+        var windowMs = Number($("averageWindow").value) * 60 * 1000;
+        var from = now - windowMs;
+        var ws = waves(session);
+        var ps = pauses(session);
 
-        const waveValues = ws
-          .filter(s => s.start >= from && s.end !== null)
-          .map(s => duration(s, now));
+        var waveValues = [];
+        var pauseValues = [];
+        var intervalValues = [];
 
-        const pauseValues = ps
-          .filter(s => s.start >= from && s.end !== null)
-          .map(s => duration(s, now));
-
-        const intervalValues = [];
-        for (let i = 1; i < ws.length; i++) {
-          if (ws[i].start >= from) intervalValues.push(ws[i].start - ws[i - 1].start);
+        for (var i = 0; i < ws.length; i++) {
+          if (ws[i].start >= from && ws[i].end !== null && ws[i].end !== undefined) {
+            waveValues.push(duration(ws[i], now));
+          }
+        }
+        for (var j = 0; j < ps.length; j++) {
+          if (ps[j].start >= from && ps[j].end !== null && ps[j].end !== undefined) {
+            pauseValues.push(duration(ps[j], now));
+          }
+        }
+        for (var k = 1; k < ws.length; k++) {
+          if (ws[k].start >= from) intervalValues.push(ws[k].start - ws[k - 1].start);
         }
 
-        $("avgWave").textContent = fmt(average(waveValues));
-        $("avgPause").textContent = fmt(average(pauseValues));
-        $("avgInterval").textContent = fmt(average(intervalValues));
+        var avgWave = average(waveValues);
+        var avgPause = average(pauseValues);
+        var avgInterval = average(intervalValues);
+
+        $("avgWave").textContent = avgWave === null ? "—" : fmt(avgWave);
+        $("avgPause").textContent = avgPause === null ? "—" : fmt(avgPause);
+        $("avgInterval").textContent = avgInterval === null ? "—" : fmt(avgInterval);
       }
 
       function renderList(session, now) {
-        const list = $("recordsList");
-        const ws = waves(session);
-        const water = waterEvents(session);
-        const notes = noteEvents(session);
-        const editable = isCurrentView() && !session?.finished;
+        var list = $("recordsList");
+        var ws = waves(session);
+        var water = waterEvents(session);
+        var notes = noteEvents(session);
+        var editable = isCurrentView() && !(session && session.finished);
 
-        $("recordsSummary").textContent =
-          `Wellendaten anzeigen (${ws.length}${water.length ? ` · ${water.length} Blasensprung${water.length > 1 ? "e" : ""}` : ""}${notes.length ? ` · ${notes.length} Notiz${notes.length > 1 ? "en" : ""}` : ""})`;
+        var summary = "Wellendaten anzeigen (" + ws.length;
+        if (water.length) summary += " · " + water.length + " " + (water.length > 1 ? "Blasensprünge" : "Blasensprung");
+        if (notes.length) summary += " · " + notes.length + " Notiz" + (notes.length > 1 ? "en" : "");
+        summary += ")";
+        $("recordsSummary").textContent = summary;
 
         if (!ws.length && !water.length && !notes.length) {
           list.innerHTML = '<div class="empty">Noch keine Wellen aufgezeichnet.</div>';
           return;
         }
 
-        const items = [];
+        var items = [];
+        for (var i = 0; i < ws.length; i++) {
+          items.push({ kind: "wave", at: ws[i].start, wave: ws[i], num: i + 1 });
+        }
+        for (var j = 0; j < water.length; j++) {
+          items.push({ kind: "water", at: water[j].at, event: water[j], num: j + 1 });
+        }
+        for (var k = 0; k < notes.length; k++) {
+          items.push({ kind: "note", at: notes[k].at, event: notes[k], num: k + 1 });
+        }
+        items.sort(function (a, b) { return b.at - a.at; });
 
-        ws.forEach((wave, index) => {
-          items.push({ kind: "wave", at: wave.start, wave, num: index + 1 });
-        });
-
-        water.forEach((event, index) => {
-          items.push({ kind: "water", at: event.at, event, num: index + 1 });
-        });
-
-        notes.forEach((event, index) => {
-          items.push({ kind: "note", at: event.at, event, num: index + 1 });
-        });
-
-        items.sort((a, b) => b.at - a.at);
-
-        list.innerHTML = items.map(item => {
-          const time = timeOfDay(item.at);
+        var html = "";
+        for (var n = 0; n < items.length; n++) {
+          var item = items[n];
+          var time = timeOfDay(item.at);
 
           if (item.kind === "wave") {
-            const length = item.wave.end === null ? "läuft" : fmt(item.wave.end - item.wave.start);
-            return `
-              <div class="wave-row">
-                <div class="wave-info">
-                  <div class="wave-title">Welle ${item.num} · ${time}</div>
-                  <div class="wave-detail">Dauer: ${length}</div>
-                </div>
-                ${editable
-                  ? `<button class="delete-button" type="button" data-delete-wave="${item.wave.start}">Löschen</button>`
-                  : ""}
-              </div>
-            `;
+            var length = (item.wave.end === null || item.wave.end === undefined)
+              ? "läuft"
+              : fmt(item.wave.end - item.wave.start);
+            html +=
+              '<div class="wave-row">' +
+                '<div class="wave-info">' +
+                  '<div class="wave-title">Welle ' + item.num + ' · ' + time + '</div>' +
+                  '<div class="wave-detail">Dauer: ' + length + '</div>' +
+                '</div>' +
+                (editable
+                  ? '<button class="delete-button" type="button" data-delete-wave="' + item.wave.start + '">Löschen</button>'
+                  : "") +
+              '</div>';
+          } else if (item.kind === "water") {
+            html +=
+              '<div class="wave-row water-row">' +
+                '<div class="wave-info">' +
+                  '<div class="wave-title">Blasensprung · ' + time + ' Uhr</div>' +
+                  '<div class="wave-detail">' + agoLabel(now - item.at) + '</div>' +
+                '</div>' +
+                (editable
+                  ? '<button class="delete-button water-delete" type="button" data-delete-water="' + item.at + '">Löschen</button>'
+                  : "") +
+              '</div>';
+          } else {
+            html +=
+              '<div class="wave-row note-row">' +
+                '<div class="wave-info">' +
+                  '<div class="wave-title">Notiz N' + item.num + ' · ' + time + ' Uhr</div>' +
+                  '<div class="wave-detail note-text">' + escapeHtml(item.event.text) + '</div>' +
+                '</div>' +
+                (editable
+                  ? '<button class="delete-button" type="button" data-delete-note="' + item.at + '">Löschen</button>'
+                  : "") +
+              '</div>';
           }
+        }
 
-          if (item.kind === "water") {
-            return `
-              <div class="wave-row water-row">
-                <div class="wave-info">
-                  <div class="wave-title">Blasensprung · ${time} Uhr</div>
-                  <div class="wave-detail">${agoLabel(now - item.at)}</div>
-                </div>
-                ${editable
-                  ? `<button class="delete-button water-delete" type="button" data-delete-water="${item.at}">Löschen</button>`
-                  : ""}
-              </div>
-            `;
-          }
+        list.innerHTML = html;
 
-          return `
-            <div class="wave-row note-row">
-              <div class="wave-info">
-                <div class="wave-title">Notiz N${item.num} · ${time} Uhr</div>
-                <div class="wave-detail note-text">${escapeHtml(item.event.text)}</div>
-              </div>
-              ${editable
-                ? `<button class="delete-button" type="button" data-delete-note="${item.at}">Löschen</button>`
-                : ""}
-            </div>
-          `;
-        }).join("");
-
-        list.querySelectorAll("[data-delete-wave]").forEach(button => {
-          button.addEventListener("click", () => deleteWave(Number(button.dataset.deleteWave)));
-        });
-        list.querySelectorAll("[data-delete-water]").forEach(button => {
-          button.addEventListener("click", () => deleteEvent("water", Number(button.dataset.deleteWater)));
-        });
-        list.querySelectorAll("[data-delete-note]").forEach(button => {
-          button.addEventListener("click", () => deleteEvent("note", Number(button.dataset.deleteNote)));
-        });
-      }
-
-      function escapeHtml(text) {
-        return text
-          .replaceAll("&", "&amp;")
-          .replaceAll("<", "&lt;")
-          .replaceAll(">", "&gt;");
+        var deleteWaveButtons = list.querySelectorAll("[data-delete-wave]");
+        for (var a = 0; a < deleteWaveButtons.length; a++) {
+          deleteWaveButtons[a].addEventListener("click", function () {
+            deleteWave(Number(this.getAttribute("data-delete-wave")));
+          });
+        }
+        var deleteWaterButtons = list.querySelectorAll("[data-delete-water]");
+        for (var b = 0; b < deleteWaterButtons.length; b++) {
+          deleteWaterButtons[b].addEventListener("click", function () {
+            deleteEvent("water", Number(this.getAttribute("data-delete-water")));
+          });
+        }
+        var deleteNoteButtons = list.querySelectorAll("[data-delete-note]");
+        for (var c = 0; c < deleteNoteButtons.length; c++) {
+          deleteNoteButtons[c].addEventListener("click", function () {
+            deleteEvent("note", Number(this.getAttribute("data-delete-note")));
+          });
+        }
       }
 
       function renderHistory() {
-        const list = $("historyList");
-        const ordered = [...sessions].sort((a, b) => b.startedAt - a.startedAt);
+        var list = $("historyList");
+        var ordered = sessions.slice().sort(function (a, b) { return b.startedAt - a.startedAt; });
 
-        $("historySummary").textContent = `Gespeicherte Messungen anzeigen (${sessions.length})`;
+        $("historySummary").textContent = "Gespeicherte Messungen anzeigen (" + sessions.length + ")";
 
         if (!ordered.length) {
           list.innerHTML = '<div class="empty">Noch keine gespeicherten Messungen.</div>';
           return;
         }
 
-        list.innerHTML = ordered.map(session => {
-          const isCurrent = session.id === currentId;
-          const isSelected = session.id === selectedId;
-          const label = isCurrent ? "Aktuell" : session.finished ? "Beendet" : "Gespeichert";
-          const count = waves(session).length;
-          const extras = [
-            waterEvents(session).length ? `${waterEvents(session).length}× Blasensprung` : "",
-            noteEvents(session).length ? `${noteEvents(session).length} Notiz(en)` : ""
-          ].filter(Boolean).join(" · ");
+        var html = "";
+        for (var i = 0; i < ordered.length; i++) {
+          var session = ordered[i];
+          var isCurrent = session.id === currentId;
+          var isSelected = session.id === selectedId;
+          var label = isCurrent ? "Aktuell" : (session.finished ? "Beendet" : "Gespeichert");
+          var count = waves(session).length;
+          var extras = [];
+          if (waterEvents(session).length) extras.push(waterEvents(session).length + "× Blasensprung");
+          if (noteEvents(session).length) extras.push(noteEvents(session).length + " Notiz(en)");
 
-          return `
-            <div class="history-row">
-              <div class="history-info">
-                <div class="history-title">${dateTime(session.startedAt)}</div>
-                <div class="history-detail">${label} · ${count} Wellen${extras ? ` · ${extras}` : ""}</div>
-              </div>
-              <button class="history-button" type="button" data-open="${session.id}" ${isSelected ? "disabled" : ""}>
-                ${isSelected ? "Angezeigt" : "Öffnen"}
-              </button>
-            </div>
-          `;
-        }).join("");
+          html +=
+            '<div class="history-row">' +
+              '<div class="history-info">' +
+                '<div class="history-title">' + dateTime(session.startedAt) + '</div>' +
+                '<div class="history-detail">' + label + ' · ' + count + ' Wellen' +
+                  (extras.length ? " · " + extras.join(" · ") : "") + '</div>' +
+              '</div>' +
+              '<button class="history-button" type="button" data-open="' + session.id + '"' +
+                (isSelected ? " disabled" : "") + '>' +
+                (isSelected ? "Angezeigt" : "Öffnen") +
+              '</button>' +
+            '</div>';
+        }
 
-        list.querySelectorAll("[data-open]").forEach(button => {
-          button.addEventListener("click", () => {
-            selectedId = button.dataset.open;
+        list.innerHTML = html;
+
+        var openButtons = list.querySelectorAll("[data-open]");
+        for (var j = 0; j < openButtons.length; j++) {
+          openButtons[j].addEventListener("click", function () {
+            selectedId = this.getAttribute("data-open");
             viewRight = null;
             render();
           });
-        });
+        }
       }
 
       function deleteWave(start) {
-        const session = activeSession();
+        var session = activeSession();
         if (!session || !isCurrentView() || session.finished) return;
 
-        const ws = waves(session);
-        const index = ws.findIndex(w => w.start === start);
+        var ws = waves(session);
+        var index = -1;
+        for (var i = 0; i < ws.length; i++) {
+          if (ws[i].start === start) { index = i; break; }
+        }
         if (index < 0) return;
 
         if (!confirm("Diese Welle löschen? Ihre Dauer und die folgende Pause werden der vorherigen Pause zugeschlagen, falls eine vorhanden ist.")) {
           return;
         }
 
-        const wave = ws[index];
-        const previousWave = ws[index - 1];
-        const nextWave = ws[index + 1];
+        var wave = ws[index];
+        var previousWave = index > 0 ? ws[index - 1] : null;
+        var nextWave = index < ws.length - 1 ? ws[index + 1] : null;
 
-        const previousPause = previousWave
-          ? session.segments.find(s =>
-              s.type === "pause" &&
-              s.start >= (previousWave.end ?? previousWave.start) &&
-              s.start < wave.start
-            )
-          : null;
+        var previousPause = null;
+        if (previousWave) {
+          var prevEnd = previousWave.end !== null && previousWave.end !== undefined
+            ? previousWave.end : previousWave.start;
+          for (var p = 0; p < session.segments.length; p++) {
+            var seg = session.segments[p];
+            if (seg.type === "pause" && seg.start >= prevEnd && seg.start < wave.start) {
+              previousPause = seg;
+            }
+          }
+        }
 
-        const followingPause = session.segments.find(s =>
-          s.type === "pause" &&
-          s.start >= (wave.end ?? wave.start) &&
-          (!nextWave || s.start < nextWave.start)
-        );
+        var waveEnd = wave.end !== null && wave.end !== undefined ? wave.end : wave.start;
+        var followingPause = null;
+        for (var q = 0; q < session.segments.length; q++) {
+          var seg2 = session.segments[q];
+          if (seg2.type === "pause" && seg2.start >= waveEnd &&
+              (!nextWave || seg2.start < nextWave.start)) {
+            followingPause = seg2;
+          }
+        }
 
         if (previousPause) {
           previousPause.end = followingPause
@@ -1085,40 +1174,52 @@
             : wave.end;
         }
 
-        const remove = new Set([wave]);
-        if (followingPause) remove.add(followingPause);
+        var removeMap = {};
+        removeMap[wave.start + "-" + wave.type] = true;
+        if (followingPause) removeMap[followingPause.start + "-" + followingPause.type] = true;
 
         if (!previousWave && !previousPause) {
-          const leadingPause = session.segments.find(s =>
-            s.type === "pause" && s.end !== null && s.end <= wave.start
-          );
-          if (leadingPause) remove.add(leadingPause);
+          for (var r = 0; r < session.segments.length; r++) {
+            var seg3 = session.segments[r];
+            if (seg3.type === "pause" && seg3.end !== null && seg3.end <= wave.start) {
+              removeMap[seg3.start + "-" + seg3.type] = true;
+            }
+          }
         }
 
-        session.segments = session.segments.filter(s => !remove.has(s));
+        var kept = [];
+        for (var s = 0; s < session.segments.length; s++) {
+          var seg4 = session.segments[s];
+          if (!removeMap[seg4.start + "-" + seg4.type]) kept.push(seg4);
+        }
+        session.segments = kept;
+
         save();
         render();
       }
 
       function deleteEvent(type, at) {
-        const session = activeSession();
+        var session = activeSession();
         if (!session || !isCurrentView() || session.finished) return;
 
-        const label = type === "water" ? "Diesen Blasensprung" : "Diese Notiz";
-        if (!confirm(`${label} löschen?`)) return;
+        var label = type === "water" ? "Diesen Blasensprung" : "Diese Notiz";
+        if (!confirm(label + " löschen?")) return;
 
-        session.events = (session.events || []).filter(
-          e => !(e.type === type && e.at === at)
-        );
+        var kept = [];
+        for (var i = 0; i < session.events.length; i++) {
+          var ev = session.events[i];
+          if (!(ev.type === type && ev.at === at)) kept.push(ev);
+        }
+        session.events = kept;
+
         save();
         render();
       }
 
       function addWater() {
-        const session = activeSession();
+        var session = activeSession();
         if (!session || selectedId !== currentId || session.finished) return;
 
-        session.events = session.events || [];
         session.events.push({ type: "water", at: Date.now(), text: "" });
         save();
         render();
@@ -1126,18 +1227,17 @@
       }
 
       function addNote() {
-        const session = activeSession();
+        var session = activeSession();
         if (!session || selectedId !== currentId || session.finished) return;
 
-        const field = $("noteText");
-        const text = field.value.trim();
+        var field = $("noteText");
+        var text = field.value.replace(/^\s+|\s+$/g, "");
         if (!text) {
           field.focus();
           return;
         }
 
-        session.events = session.events || [];
-        session.events.push({ type: "note", at: Date.now(), text });
+        session.events.push({ type: "note", at: Date.now(), text: text });
         field.value = "";
         save();
         render();
@@ -1145,17 +1245,17 @@
       }
 
       function openDetailDialog(target, now) {
-        const title = $("dialogTitle");
-        const sub = $("dialogSub");
-        const body = $("dialogBody");
+        var title = $("dialogTitle");
+        var sub = $("dialogSub");
+        var body = $("dialogBody");
 
         if (target.type === "note") {
-          title.textContent = `Notiz N${target.num} · ${timeOfDay(target.event.at)} Uhr`;
+          title.textContent = "Notiz N" + target.num + " · " + timeOfDay(target.event.at) + " Uhr";
           sub.textContent = agoLabel(now - target.event.at);
           body.hidden = false;
           body.textContent = target.event.text || "(Kein Text)";
         } else {
-          title.textContent = `Blasensprung · ${timeOfDay(target.event.at)} Uhr`;
+          title.textContent = "Blasensprung · " + timeOfDay(target.event.at) + " Uhr";
           sub.textContent = agoLabel(now - target.event.at);
           body.hidden = true;
           body.textContent = "";
@@ -1164,42 +1264,58 @@
         $("detailDialog").showModal();
       }
 
+      function pad2(value) {
+        return value < 10 ? "0" + value : String(value);
+      }
+
       function axisLabel(mode, elapsedMs, absoluteTs) {
         if (mode === "clock") {
-          const d = new Date(absoluteTs);
-          const hh = String(d.getHours()).padStart(2, "0");
-          const mm = String(d.getMinutes()).padStart(2, "0");
-          return `${hh}:${mm}`;
+          var d = new Date(absoluteTs);
+          return pad2(d.getHours()) + ":" + pad2(d.getMinutes());
         }
-        const seconds = Math.max(0, Math.floor(elapsedMs / 1000));
-        const hours = Math.floor(seconds / 3600);
-        const minutes = Math.floor((seconds % 3600) / 60);
-        const remainder = seconds % 60;
+        var seconds = Math.max(0, Math.floor(elapsedMs / 1000));
+        var hours = Math.floor(seconds / 3600);
+        var minutes = Math.floor((seconds % 3600) / 60);
+        var remainder = seconds % 60;
 
         if (hours > 0) {
-          return `${hours}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
+          return hours + ":" + pad2(minutes) + ":" + pad2(remainder);
         }
         if (minutes > 0) {
-          return `${minutes}:${String(remainder).padStart(2, "0")} min`;
+          return minutes + ":" + pad2(remainder) + " min";
         }
-        return `${remainder} sec`;
+        return remainder + " sec";
       }
 
       function resizeCanvas() {
-        const rect = canvas.getBoundingClientRect();
-        const dpr = window.devicePixelRatio || 1;
+        var rect = canvas.getBoundingClientRect();
+        var dpr = window.devicePixelRatio || 1;
         canvas.width = Math.max(1, Math.round(rect.width * dpr));
         canvas.height = Math.max(1, Math.round(rect.height * dpr));
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         drawGraph(Date.now());
       }
 
+      function roundRectPath(x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        ctx.lineTo(x + r, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+      }
+
       function drawGraph(now) {
-        const session = selectedSession();
-        const segments = session?.segments || [];
-        const rect = canvas.getBoundingClientRect();
-        const w = rect.width;
-        const h = rect.height;
+        var session = selectedSession();
+        var segments = session ? session.segments : [];
+        var rect = canvas.getBoundingClientRect();
+        var w = rect.width;
+        var h = rect.height;
         if (!w || !h) return;
 
         ctx.clearRect(0, 0, w, h);
@@ -1216,37 +1332,37 @@
           return;
         }
 
-        const first = Math.min(...segments.map(s => s.start));
-        const dataEnd = Math.max(
-          session.finished ? (session.endedAt || now) : now,
-          ...segments.map(s => s.end ?? now)
-        );
-        const available = Math.max(0, dataEnd - first);
-        const visibleSpan = Math.min(viewSpan, Math.max(available, 1));
+        var first = segments[0].start;
+        var dataEnd = session.finished && session.endedAt ? session.endedAt : now;
+        for (var i = 0; i < segments.length; i++) {
+          var segEnd = segments[i].end !== null && segments[i].end !== undefined ? segments[i].end : now;
+          if (segEnd > dataEnd) dataEnd = segEnd;
+        }
 
-        // Rechter Rand: entweder am live Ende folgen oder am gesetzten
-        // Zeitanker bleiben (statischer Ausschnitt), höchstens bis zum Datenende.
-        let right = viewRight === null ? dataEnd : Math.min(viewRight, dataEnd);
-        let left = Math.max(first, right - visibleSpan);
+        var available = Math.max(0, dataEnd - first);
+        var visibleSpan = Math.min(viewSpan, Math.max(available, 1));
 
-        // Nicht weiter nach links als bis zum Messungsbeginn ziehen.
+        var right = viewRight === null ? dataEnd : Math.min(viewRight, dataEnd);
+        var left = Math.max(first, right - visibleSpan);
         if (viewRight !== null) viewRight = Math.max(viewRight, first + visibleSpan);
 
-        const actualSpan = Math.max(1, right - left);
+        var actualSpan = Math.max(1, right - left);
 
-        // Merker für Gesten und Zoom (Mitte bleibt beim Zoomen erhalten).
         lastFirst = first;
         lastRight = right;
         lastCenter = (left + right) / 2;
         lastVisibleSpan = visibleSpan;
         lastDataEnd = dataEnd;
 
-        const padL = 14;
-        const padR = 14;
-        const chartW = w - padL - padR;
-        const mapX = time => padL + ((time - left) / actualSpan) * chartW;
-        const y = 56;
-        const barH = 38;
+        var padL = 14;
+        var padR = 14;
+        var chartW = w - padL - padR;
+        var y = 56;
+        var barH = 38;
+
+        function mapX(time) {
+          return padL + ((time - left) / actualSpan) * chartW;
+        }
 
         ctx.strokeStyle = "#eee4dc";
         ctx.lineWidth = 1;
@@ -1254,32 +1370,31 @@
         ctx.font = "11px system-ui, sans-serif";
         ctx.textAlign = "center";
 
-        const divisions = 4;
-        for (let i = 0; i <= divisions; i++) {
-          const x = padL + chartW * i / divisions;
+        var divisions = 4;
+        for (var d = 0; d <= divisions; d++) {
+          var x = padL + chartW * d / divisions;
           ctx.beginPath();
           ctx.moveTo(x, 32);
           ctx.lineTo(x, 132);
           ctx.stroke();
 
-          const time = left + actualSpan * i / divisions;
+          var time = left + actualSpan * d / divisions;
           ctx.fillText(axisLabel(timeMode, time - first, time), x, 155);
         }
 
         ctx.fillStyle = "#f0e7e0";
-        ctx.beginPath();
-        ctx.roundRect(padL, y, chartW, barH, 9);
+        roundRectPath(padL, y, chartW, barH, 9);
         ctx.fill();
 
         ctx.save();
-        ctx.beginPath();
-        ctx.roundRect(padL, y, chartW, barH, 9);
+        roundRectPath(padL, y, chartW, barH, 9);
         ctx.clip();
 
-        for (const segment of segments) {
-          const end = segment.end ?? session.endedAt ?? now;
-          const x1 = mapX(segment.start);
-          const x2 = mapX(end);
+        for (var s = 0; s < segments.length; s++) {
+          var segment = segments[s];
+          var end = segment.end !== null && segment.end !== undefined ? segment.end : now;
+          var x1 = mapX(segment.start);
+          var x2 = mapX(end);
           if (x2 < padL || x1 > w - padR) continue;
 
           ctx.fillStyle = segment.type === "wave" ? "#bd6553" : "#d9b989";
@@ -1287,36 +1402,34 @@
         }
         ctx.restore();
 
-        // Blasensprung als dezentblaue gestrichelte Linie einblenden.
         if ($("showWater").checked) {
-          ctx.textAlign = "center";
-          const waters = waterEvents(session);
-          for (let wIndex = 0; wIndex < waters.length; wIndex++) {
-            const event = waters[wIndex];
-            if (event.at < left || event.at > right) continue;
-            const x = mapX(event.at);
-            if (x < padL || x > w - padR) continue;
+          var waters = waterEvents(session);
+          for (var wi = 0; wi < waters.length; wi++) {
+            var wEvent = waters[wi];
+            if (wEvent.at < left || wEvent.at > right) continue;
+            var wx = mapX(wEvent.at);
+            if (wx < padL || wx > w - padR) continue;
 
             ctx.save();
             ctx.strokeStyle = "#8aa9c6";
             ctx.lineWidth = 2;
             ctx.setLineDash([5, 4]);
             ctx.beginPath();
-            ctx.moveTo(x, y - 8);
-            ctx.lineTo(x, y + barH + 6);
+            ctx.moveTo(wx, y - 8);
+            ctx.lineTo(wx, y + barH + 6);
             ctx.stroke();
             ctx.restore();
 
             ctx.fillStyle = "#7d9bb8";
             ctx.font = "bold 10px system-ui, sans-serif";
-            ctx.fillText("BS", x, y - 13);
+            ctx.textAlign = "center";
+            ctx.fillText("BS", wx, y - 13);
 
-            // Breite vertikale Trefferfläche entlang der gestrichelten Linie.
             hitTargets.push({
               type: "water",
-              event,
-              num: wIndex + 1,
-              x,
+              event: wEvent,
+              num: wi + 1,
+              x: wx,
               top: y - 28,
               bottom: y + barH + 14,
               halfWidth: 30
@@ -1324,31 +1437,29 @@
           }
         }
 
-        // Notizen als nummerierte Punkte unterhalb des Balkens einblenden.
         if ($("showNotes").checked) {
-          const notes = noteEvents(session);
+          var notes = noteEvents(session);
           ctx.font = "10px system-ui, sans-serif";
-          for (let nIndex = 0; nIndex < notes.length; nIndex++) {
-            const event = notes[nIndex];
-            if (event.at < left || event.at > right) continue;
-            const x = mapX(event.at);
-            if (x < padL || x > w - padR) continue;
+          for (var ni = 0; ni < notes.length; ni++) {
+            var nEvent = notes[ni];
+            if (nEvent.at < left || nEvent.at > right) continue;
+            var nx = mapX(nEvent.at);
+            if (nx < padL || nx > w - padR) continue;
 
             ctx.fillStyle = "#a3814f";
             ctx.beginPath();
-            ctx.arc(x, y + barH + 12, 4, 0, Math.PI * 2);
+            ctx.arc(nx, y + barH + 12, 4, 0, Math.PI * 2);
             ctx.fill();
 
             ctx.fillStyle = "#7a6a52";
             ctx.textAlign = "left";
-            ctx.fillText(`N${nIndex + 1}`, x + 7, y + barH + 16);
+            ctx.fillText("N" + (ni + 1), nx + 7, y + barH + 16);
 
-            // Große runde Trefferfläche um den Notizpunkt.
             hitTargets.push({
               type: "note",
-              event,
-              num: nIndex + 1,
-              x,
+              event: nEvent,
+              num: ni + 1,
+              x: nx,
               y: y + barH + 12,
               radius: 34
             });
@@ -1367,41 +1478,40 @@
       function findHitTarget(clientX, clientY) {
         if (!hitTargets.length) return null;
 
-        const rect = canvas.getBoundingClientRect();
-        const px = clientX - rect.left;
-        const py = clientY - rect.top;
+        var rect = canvas.getBoundingClientRect();
+        var px = clientX - rect.left;
+        var py = clientY - rect.top;
 
-        // Wasser-Linien zuerst prüfen, damit überlappende Notizpunkte nicht gewinnen.
-        for (const target of hitTargets) {
+        var i, target, distance;
+
+        for (i = 0; i < hitTargets.length; i++) {
+          target = hitTargets[i];
           if (target.type !== "water") continue;
-          if (
-            Math.abs(px - target.x) <= target.halfWidth &&
-            py >= target.top && py <= target.bottom
-          ) {
+          if (Math.abs(px - target.x) <= target.halfWidth &&
+              py >= target.top && py <= target.bottom && py < 75) {
             return target;
           }
         }
 
-        for (const target of hitTargets) {
+        for (i = 0; i < hitTargets.length; i++) {
+          target = hitTargets[i];
           if (target.type !== "note") continue;
-          if (Math.hypot(px - target.x, py - target.y) <= target.radius) {
+          if (Math.sqrt((px - target.x) * (px - target.x) + (py - target.y) * (py - target.y)) <= target.radius && py >= 75) {
             return target;
           }
         }
 
-        // Fallback: nächstgelegene Trefferfläche innerhalb eines Extra-Randbereichs.
-        let best = null;
-        let bestDistance = Infinity;
+        var best = null;
+        var bestDistance = Infinity;
 
-        for (const target of hitTargets) {
-          let distance;
+        for (i = 0; i < hitTargets.length; i++) {
+          target = hitTargets[i];
           if (target.type === "water") {
-            if (py < target.top || py > target.bottom) continue;
+            if (py < target.top || py > target.bottom || py >= 75) continue;
             distance = Math.abs(px - target.x);
           } else {
-            distance = Math.hypot(px - target.x, py - target.y);
+            distance = Math.sqrt((px - target.x) * (px - target.x) + (py - target.y) * (py - target.y));
           }
-
           if (distance < bestDistance) {
             bestDistance = distance;
             best = target;
@@ -1413,102 +1523,125 @@
       }
 
       function handleTap(clientX, clientY) {
-        const target = findHitTarget(clientX, clientY);
+        var target = findHitTarget(clientX, clientY);
         if (target) openDetailDialog(target, Date.now());
       }
 
       function render() {
-        const now = Date.now();
-        const session = selectedSession();
+        var now = Date.now();
+        var session = selectedSession();
         renderCurrent(now);
         renderList(session, now);
         renderHistory();
         drawGraph(now);
       }
 
-      $("toggle").addEventListener("click", () => {
-        const session = activeSession();
-        if (!session || selectedId !== currentId) return;
-
-        const now = Date.now();
-        const active = session.segments.findLast(s => s.end === null);
-
-        if (!active) {
-          // Neue Welle beginnen – auch nach "Messung beenden" (v7.1).
-          // Der beendete Status wird aufgehoben; die Zwischenzeit bleibt
-          // als Lücke im Verlauf, ohne aufgefüllt zu werden.
-          session.finished = false;
-          session.endedAt = null;
-          session.segments.push({ type: "wave", start: now, end: null });
-        } else if (active.type === "wave") {
-          active.end = now;
-          session.segments.push({ type: "pause", start: now, end: null });
-        } else {
-          active.end = now;
-          session.segments.push({ type: "wave", start: now, end: null });
-        }
-
-        viewRight = null;
-        save();
-        render();
-      });
-
-      $("averageWindow").addEventListener("change", render);
-      $("addWater").addEventListener("click", addWater);
-      $("addNote").addEventListener("click", addNote);
-      $("showWater").addEventListener("change", () => drawGraph(Date.now()));
-      $("showNotes").addEventListener("change", () => drawGraph(Date.now()));
-
-      // Umschalter: Dauer seit Start ↔ Uhrzeit
       function setTimeMode(mode) {
         timeMode = mode;
         $("modeElapsed").classList.toggle("active", mode === "elapsed");
         $("modeClock").classList.toggle("active", mode === "clock");
         drawGraph(Date.now());
       }
-      $("modeElapsed").addEventListener("click", () => setTimeMode("elapsed"));
-      $("modeClock").addEventListener("click", () => setTimeMode("clock"));
 
       function zoomBy(factor) {
         viewSpan = Math.max(MIN_VIEW, Math.min(MAX_VIEW, viewSpan * factor));
-
-        // Die Mitte des aktuellen Ausschnitts bleibt beim Zoomen erhalten,
-        // statt zum Ende der Zeitskala zu springen.
         if (lastDataEnd) {
-          const target = lastCenter + viewSpan / 2;
+          var target = lastCenter + viewSpan / 2;
           viewRight = target >= lastDataEnd ? null : target;
         }
-
         drawGraph(Date.now());
       }
 
-      $("zoomIn").addEventListener("click", () => zoomBy(1 / 1.5));
-      $("zoomOut").addEventListener("click", () => zoomBy(1.5));
+      /* ---------- Ereignisse ---------- */
 
-      $("resetView").addEventListener("click", () => {
-        const session = selectedSession();
-        const segments = session?.segments || [];
+	  $("toggle").addEventListener("click", function () {
+	  /* Fall A: Es wird eine alte (nicht aktive) Messung angezeigt.
+		 Der Tipp auf "Welle starten" macht sie JETZT zur aktiven
+		 Messung und startet darin die neue Welle. */
+	    if (selectedId !== currentId) {
+		  if (!confirm("Diese gespeicherte Messung zur aktiven Messung machen und hier eine neue Welle starten? Die bisher aktive Messung wird dabei beendet.")) {
+		  return;
+		  }
+
+		  var now = Date.now();
+
+		/* Bisher aktive Messung sauber abschließen (falls offen). */
+		  var oldActive = activeSession();
+		    if (oldActive && !oldActive.finished) {
+		    closeOpenSegment(oldActive, now);
+		    oldActive.finished = true;
+		    oldActive.endedAt = now;
+		  }
+
+		/* Angezeigte Messung übernehmen und direkt weiterführen.
+		   Der Beendet-Status fällt, die neue Welle beginnt jetzt. */
+		  currentId = selectedId;
+		  var session = selectedSession();
+		  session.finished = false;
+		  session.endedAt = null;
+		  session.segments.push({ type: "wave", start: now, end: null });
+
+		  viewRight = null;
+		  save();
+		  render();
+		  return;
+	    }
+
+	  /* Fall B: Normales Verhalten in der aktiven Messung. */
+	  var session = activeSession();
+	  if (!session) return;
+
+	  var now = Date.now();
+	  var active = findLastMatch(session.segments, function (s) { return s.end === null; });
+
+	  if (!active) {
+		session.finished = false;
+		session.endedAt = null;
+		session.segments.push({ type: "wave", start: now, end: null });
+	  } else if (active.type === "wave") {
+		active.end = now;
+		session.segments.push({ type: "pause", start: now, end: null });
+	  } else {
+		active.end = now;
+		session.segments.push({ type: "wave", start: now, end: null });
+	  }
+
+	  viewRight = null;
+	  save();
+	  render();
+	});
+
+      $("averageWindow").addEventListener("change", render);
+      $("addWater").addEventListener("click", addWater);
+      $("addNote").addEventListener("click", addNote);
+      $("showWater").addEventListener("change", function () { drawGraph(Date.now()); });
+      $("showNotes").addEventListener("change", function () { drawGraph(Date.now()); });
+
+      $("modeElapsed").addEventListener("click", function () { setTimeMode("elapsed"); });
+      $("modeClock").addEventListener("click", function () { setTimeMode("clock"); });
+
+      $("zoomIn").addEventListener("click", function () { zoomBy(1 / 1.5); });
+      $("zoomOut").addEventListener("click", function () { zoomBy(1.5); });
+
+      $("resetView").addEventListener("click", function () {
+        var session = selectedSession();
+        var segments = session ? session.segments : [];
         if (!segments.length) return;
 
-        const first = Math.min(...segments.map(s => s.start));
-        const end = session.finished ? (session.endedAt || Date.now()) : Date.now();
+        var first = segments[0].start;
+        var end = session.finished && session.endedAt ? session.endedAt : Date.now();
         viewSpan = Math.max(MIN_VIEW, Math.min(MAX_VIEW, end - first));
         viewRight = null;
         drawGraph(Date.now());
       });
 
-      wrap.addEventListener("touchstart", event => {
+      wrap.addEventListener("touchstart", function (event) {
         if (event.touches.length === 2) {
-          const distance = Math.hypot(
-            event.touches[0].clientX - event.touches[1].clientX,
-            event.touches[0].clientY - event.touches[1].clientY
+          var distance = Math.sqrt(
+            (event.touches[0].clientX - event.touches[1].clientX) * (event.touches[0].clientX - event.touches[1].clientX) +
+            (event.touches[0].clientY - event.touches[1].clientY) * (event.touches[0].clientY - event.touches[1].clientY)
           );
-          gesture = {
-            type: "pinch",
-            distance,
-            span: viewSpan,
-            center: lastCenter
-          };
+          gesture = { type: "pinch", distance: distance, span: viewSpan, center: lastCenter };
           touchStart = null;
         } else if (event.touches.length === 1) {
           gesture = {
@@ -1525,48 +1658,41 @@
         }
       }, { passive: false });
 
-      wrap.addEventListener("touchmove", event => {
+      wrap.addEventListener("touchmove", function (event) {
         if (!gesture) return;
         event.preventDefault();
 
         if (event.touches.length === 2 && gesture.type === "pinch") {
-          const distance = Math.hypot(
-            event.touches[0].clientX - event.touches[1].clientX,
-            event.touches[0].clientY - event.touches[1].clientY
+          var distance = Math.sqrt(
+            (event.touches[0].clientX - event.touches[1].clientX) * (event.touches[0].clientX - event.touches[1].clientX) +
+            (event.touches[0].clientY - event.touches[1].clientY) * (event.touches[0].clientY - event.touches[1].clientY)
           );
-          const ratio = gesture.distance / Math.max(1, distance);
+          var ratio = gesture.distance / Math.max(1, distance);
           viewSpan = Math.max(MIN_VIEW, Math.min(MAX_VIEW, gesture.span * ratio));
 
-          // Auch beim Pinch-Zoom bleibt die Mitte des Ausschnitts erhalten.
           if (lastDataEnd) {
-            const target = gesture.center + viewSpan / 2;
+            var target = gesture.center + viewSpan / 2;
             viewRight = target >= lastDataEnd ? null : target;
           }
 
           drawGraph(Date.now());
         } else if (event.touches.length === 1 && gesture.type === "pan") {
-          const dx = event.touches[0].clientX - gesture.x;
-          const msPerPixel = viewSpan / Math.max(1, canvas.clientWidth);
+          var dx = event.touches[0].clientX - gesture.x;
+          var msPerPixel = viewSpan / Math.max(1, canvas.clientWidth);
           viewRight = Math.max(gesture.minRight, gesture.right - dx * msPerPixel);
           drawGraph(Date.now());
         }
       }, { passive: false });
 
-      wrap.addEventListener("touchend", event => {
-        if (
-          gesture?.type === "pan" &&
-          touchStart &&
-          event.changedTouches.length === 1
-        ) {
-          const dx = event.changedTouches[0].clientX - touchStart.x;
-          const dy = event.changedTouches[0].clientY - touchStart.y;
-          const moved = Math.hypot(dx, dy);
-          const elapsed = Date.now() - touchStart.time;
+      wrap.addEventListener("touchend", function (event) {
+        if (gesture && gesture.type === "pan" && touchStart && event.changedTouches.length === 1) {
+          var dx = event.changedTouches[0].clientX - touchStart.x;
+          var dy = event.changedTouches[0].clientY - touchStart.y;
+          var moved = Math.sqrt(dx * dx + dy * dy);
+          var elapsed = Date.now() - touchStart.time;
 
-          // Kaum Bewegung ⇒ als Antippen werten (Schwelle bewusst großzügig).
           if (moved < 14 && elapsed < 600) {
             handleTap(event.changedTouches[0].clientX, event.changedTouches[0].clientY);
-            // Verhindert den darauffolgenden synthetischen Klick (Doppel-Auslösung).
             event.preventDefault();
           }
         }
@@ -1575,39 +1701,37 @@
         touchStart = null;
       }, { passive: false });
 
-      wrap.addEventListener("touchcancel", () => {
+      wrap.addEventListener("touchcancel", function () {
         gesture = null;
         touchStart = null;
       });
 
-      // Klick mit der Maus (Desktop) ebenfalls als Antippen werten.
-      wrap.addEventListener("click", event => {
+      wrap.addEventListener("click", function (event) {
         handleTap(event.clientX, event.clientY);
       });
 
-      $("dialogClose").addEventListener("click", () => {
+      $("dialogClose").addEventListener("click", function () {
         $("detailDialog").close();
       });
 
-      $("detailDialog").addEventListener("click", event => {
-        // Klick auf die dunkle Fläche außerhalb des Dialogs schließt ihn.
+      $("detailDialog").addEventListener("click", function (event) {
         if (event.target === $("detailDialog")) $("detailDialog").close();
       });
 
-      const helpDialog = $("helpDialog");
-      $("helpButton").addEventListener("click", () => helpDialog.showModal());
-      $("helpClose").addEventListener("click", () => helpDialog.close());
-      helpDialog.addEventListener("click", event => {
+      var helpDialog = $("helpDialog");
+      $("helpButton").addEventListener("click", function () { helpDialog.showModal(); });
+      $("helpClose").addEventListener("click", function () { helpDialog.close(); });
+      helpDialog.addEventListener("click", function (event) {
         if (event.target === helpDialog) helpDialog.close();
       });
 
-      $("finishSession").addEventListener("click", () => {
-        const session = activeSession();
+      $("finishSession").addEventListener("click", function () {
+        var session = activeSession();
         if (!session || selectedId !== currentId || session.finished) return;
 
-        if (!confirm("Die aktuelle Messung beenden? Sie bleibt in der Historie gespeichert. Per „Welle starten" kann sie später fortgesetzt werden.")) return;
+        if (!confirm("Die aktuelle Messung beenden? Sie bleibt in der Historie gespeichert. Per „Welle starten“ kann sie später fortgesetzt werden.")) return;
 
-        const now = Date.now();
+        var now = Date.now();
         closeOpenSegment(session, now);
         session.finished = true;
         session.endedAt = now;
@@ -1615,21 +1739,20 @@
         render();
       });
 
-      $("newSession").addEventListener("click", () => {
-        const oldSession = activeSession();
-
+      $("newSession").addEventListener("click", function () {
         if (!confirm("Eine neue Messung starten? Die bisherige Messung wird gespeichert und bleibt in der Historie erhalten.")) {
           return;
         }
 
+        var oldSession = activeSession();
         if (oldSession && !oldSession.finished) {
-          const now = Date.now();
+          var now = Date.now();
           closeOpenSegment(oldSession, now);
           oldSession.finished = true;
           oldSession.endedAt = now;
         }
 
-        const fresh = makeSession();
+        var fresh = makeSession();
         sessions.push(fresh);
         currentId = fresh.id;
         selectedId = fresh.id;
@@ -1637,10 +1760,10 @@
         viewSpan = 20 * 60 * 1000;
         save();
         render();
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        window.scrollTo(0, 0);
       });
 
-      $("returnCurrent").addEventListener("click", () => {
+      $("returnCurrent").addEventListener("click", function () {
         selectedId = currentId;
         viewRight = null;
         render();
