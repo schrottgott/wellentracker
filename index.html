@@ -1,0 +1,1658 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="theme-color" content="#f6eee7">
+  <title>Wellen-Tracker</title>
+  <!--
+    ============================================================
+    Wellen-Tracker · Version 7.1
+    Erstellt / weiterentwickelt: 09.11.2026
+    Bearbeitet von: Lumo (Proton) im Auftrag von SchrottGott
+    ============================================================
+  -->
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6eee7;
+      --card: #fffaf6;
+      --ink: #342a27;
+      --muted: #796b65;
+      --wave: #bd6553;
+      --pause: #d9b989;
+      --line: #eaded5;
+      --button: #9d7650;
+      --water: #7d9bb8;
+      --note: #a3814f;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+
+    main {
+      width: min(100%, 560px);
+      margin: 0 auto;
+      padding: 26px 18px 38px;
+    }
+
+    header { margin-bottom: 22px; text-align: center; }
+    h1 { margin: 0 0 5px; font-size: 1.65rem; }
+    header p, .muted { color: var(--muted); }
+    header p { margin: 0; }
+
+    .card {
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 21px;
+      background: var(--card);
+      box-shadow: 0 8px 24px #4a30200a;
+    }
+
+    .current { text-align: center; }
+    .session-date { margin: 0 0 12px; color: var(--muted); font-size: .84rem; }
+    .phase { margin: 0 0 5px; color: var(--muted); }
+
+    .timer {
+      margin: 0 0 16px;
+      font-size: clamp(3.2rem, 16vw, 5rem);
+      font-weight: 650;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -.05em;
+    }
+
+    button, select, textarea { font: inherit; }
+    button { cursor: pointer; touch-action: manipulation; }
+    button:disabled { cursor: not-allowed; opacity: .55; }
+
+    button:focus-visible, select:focus-visible, textarea:focus-visible {
+      outline: 3px solid var(--ink);
+      outline-offset: 3px;
+    }
+
+    .main-button {
+      width: 100%;
+      min-height: 62px;
+      border: 0;
+      border-radius: 17px;
+      background: var(--wave);
+      color: white;
+      font-size: 1.12rem;
+      font-weight: 700;
+    }
+
+    .main-button.pause-mode { background: var(--button); }
+    .hint { min-height: 1.35em; margin: 12px 0 0; color: var(--muted); font-size: .86rem; }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 17px;
+    }
+
+    .stat {
+      min-width: 0;
+      padding: 12px 6px;
+      border-radius: 13px;
+      background: #f7eee7;
+    }
+
+    .stat span { display: block; color: var(--muted); font-size: .75rem; }
+    .stat strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 1rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .water-status {
+      margin: 13px 0 0;
+      padding: 9px 12px;
+      border-radius: 12px;
+      background: #eef3f8;
+      color: #46647f;
+      font-size: .86rem;
+      font-weight: 650;
+    }
+
+    h2 { margin: 24px 0 11px; font-size: 1.15rem; }
+
+    .graph-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 24px 0 11px;
+    }
+
+    .graph-head h2 { margin: 0; }
+    .legend { display: flex; flex-wrap: wrap; gap: 12px; color: var(--muted); font-size: .84rem; }
+    .dot { display: inline-block; width: 10px; height: 10px; margin-right: 5px; border-radius: 50%; }
+    .dash { display: inline-block; width: 3px; height: 12px; margin-right: 5px; border-radius: 2px; }
+
+    .graph-controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin: 0 0 8px;
+    }
+
+    .zoom-buttons { display: flex; gap: 7px; }
+    .small-button {
+      min-width: 42px;
+      min-height: 40px;
+      padding: 5px 11px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: white;
+      color: var(--ink);
+    }
+
+    .small-button.active {
+      background: var(--button);
+      border-color: var(--button);
+      color: white;
+    }
+
+    .overlay-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 18px;
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: .84rem;
+    }
+
+    .check { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+    .check input { width: 17px; height: 17px; accent-color: var(--button); }
+
+    .graph-wrap {
+      width: 100%;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fffdfb;
+      touch-action: none;
+    }
+
+    canvas { display: block; width: 100%; height: 190px; }
+    .graph-hint { margin: 9px 0 0; color: var(--muted); font-size: .79rem; }
+
+    .average-controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 13px;
+      color: var(--muted);
+      font-size: .88rem;
+    }
+
+    select {
+      min-height: 42px;
+      padding: 7px 30px 7px 10px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: white;
+      color: var(--ink);
+    }
+
+    .avg-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .avg {
+      padding: 12px 6px;
+      border-radius: 13px;
+      background: #f7eee7;
+      text-align: center;
+    }
+
+    .avg span { display: block; color: var(--muted); font-size: .73rem; }
+    .avg strong {
+      display: block;
+      margin-top: 4px;
+      font-size: .98rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    details > summary { padding: 4px 0; cursor: pointer; font-weight: 650; }
+    .list { display: grid; gap: 9px; margin-top: 13px; }
+
+    .wave-row, .history-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: #fffdfb;
+    }
+
+    .wave-row.water-row {
+      border-color: #cfdcec;
+      background: #f4f8fc;
+    }
+
+    .wave-row.note-row {
+      border-color: #e8dcc4;
+      background: #fdf9f1;
+    }
+
+    .wave-info, .history-info { min-width: 0; }
+    .wave-title, .history-title { font-weight: 650; }
+    .wave-detail, .history-detail { margin-top: 3px; color: var(--muted); font-size: .82rem; }
+    .wave-detail.note-text { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
+
+    .delete-button, .history-button {
+      flex: 0 0 auto;
+      min-height: 38px;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: white;
+      color: var(--ink);
+      font-size: .84rem;
+    }
+
+    .delete-button {
+      border-color: #e7c9c1;
+      background: #fff5f2;
+      color: #8b3e31;
+    }
+
+    .delete-button.water-delete {
+      border-color: #cfdcec;
+      background: white;
+      color: #46647f;
+    }
+
+    .empty { padding: 12px 0; color: var(--muted); text-align: center; font-size: .9rem; }
+    .note { margin: 18px 2px 0; color: var(--muted); font-size: .79rem; line-height: 1.5; }
+
+    .action-button {
+      width: 100%;
+      min-height: 50px;
+      margin-top: 12px;
+      border: 1px solid #d8b8ae;
+      border-radius: 14px;
+      background: #fff5f2;
+      color: #8b3e31;
+      font-weight: 650;
+    }
+
+    .action-button.secondary {
+      border-color: var(--line);
+      background: white;
+      color: var(--ink);
+    }
+
+    .event-inputs { margin-top: 13px; display: grid; gap: 9px; }
+
+    .water-button {
+      width: 100%;
+      min-height: 48px;
+      border: 1px solid #b9cbe0;
+      border-radius: 13px;
+      background: #eef3f8;
+      color: #46647f;
+      font-weight: 650;
+    }
+
+    .note-input { display: grid; gap: 8px; }
+
+    textarea {
+      width: 100%;
+      min-height: 58px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: white;
+      color: var(--ink);
+      resize: vertical;
+    }
+
+    .note-button {
+      min-height: 42px;
+      padding: 6px 14px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: #f7efe2;
+      color: #6d5a33;
+      font-weight: 650;
+    }
+
+    .viewing-banner {
+      margin: 0 0 14px;
+      padding: 10px;
+      border-radius: 12px;
+      background: #f7eee7;
+      color: var(--muted);
+      font-size: .86rem;
+    }
+
+    dialog {
+      width: min(100%, 520px);
+      max-height: 80vh;
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--card);
+      color: var(--ink);
+    }
+
+    dialog::backdrop { background: #342a2788; }
+
+    .help-head {
+      position: sticky;
+      top: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 18px 12px;
+      background: var(--card);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .help-head h3 { margin: 0; font-size: 1.1rem; }
+
+    .help-close {
+      min-height: 38px;
+      padding: 4px 14px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: white;
+      color: var(--ink);
+    }
+
+    .help-body { padding: 14px 18px 20px; font-size: .9rem; line-height: 1.55; }
+    .help-body h4 { margin: 16px 0 6px; font-size: .95rem; }
+    .help-body h4:first-child { margin-top: 0; }
+    .help-body p { margin: 4px 0 10px; }
+    .help-body ul { margin: 4px 0 10px; padding-left: 20px; }
+    .help-body li { margin: 3px 0; }
+
+    dialog.detail-dialog {
+      width: min(92vw, 420px);
+      max-width: 92vw;
+    }
+
+    .dialog-inner { padding: 20px; }
+
+    .dialog-title { margin: 0; font-size: 1.06rem; font-weight: 700; }
+    .dialog-sub { margin: 5px 0 0; color: var(--muted); font-size: .84rem; }
+    .dialog-body {
+      margin: 13px 0 0;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      line-height: 1.55;
+    }
+
+    .dialog-close {
+      width: 100%;
+      min-height: 46px;
+      margin-top: 16px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: white;
+      color: var(--ink);
+      font-weight: 650;
+    }
+
+    @media (max-width: 360px) {
+      main { padding-right: 12px; padding-left: 12px; }
+      .card { padding: 16px 13px; }
+      .stat span, .avg span { font-size: .68rem; }
+      .stat strong, .avg strong { font-size: .88rem; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Wellen-Tracker</h1>
+    </header>
+
+    <div class="viewing-banner" id="viewingBanner" hidden></div>
+
+    <section class="card current" aria-live="polite">
+      <p class="session-date" id="sessionDate"></p>
+      <p class="phase" id="phase">Bereit</p>
+      <p class="timer" id="timer">00:00</p>
+      <button class="main-button" id="toggle" type="button">Welle starten</button>
+      <p class="hint" id="hint">Tippe beim Beginn einer Welle auf den Knopf.</p>
+
+      <div class="stats">
+        <div class="stat">
+          <span>Letzte Welle</span>
+          <strong id="lastWave">—</strong>
+        </div>
+        <div class="stat">
+          <span>Wellenpause</span>
+          <strong id="lastPause">—</strong>
+        </div>
+        <div class="stat">
+          <span>Wellenabstand</span>
+          <strong id="lastInterval">—</strong>
+        </div>
+      </div>
+
+      <p class="water-status" id="waterStatus" hidden></p>
+    </section>
+
+    <div class="graph-head">
+      <h2>Wellenverlauf</h2>
+      <div class="legend">
+        <span><i class="dot" style="background:var(--wave)"></i>Welle</span>
+        <span><i class="dot" style="background:var(--pause)"></i>Pause</span>
+        <span><i class="dash" style="background:var(--water)"></i>Blasensprung</span>
+        <span><i class="dot" style="background:var(--note)"></i>Notiz</span>
+      </div>
+    </div>
+
+    <section class="card">
+      <div class="graph-controls">
+        <div class="zoom-buttons">
+          <button class="small-button active" id="modeElapsed" type="button">Seit Start</button>
+          <button class="small-button" id="modeClock" type="button">Uhrzeit</button>
+        </div>
+        <div class="zoom-buttons">
+          <button class="small-button" id="zoomOut" type="button" aria-label="Herauszoomen">−</button>
+          <button class="small-button" id="zoomIn" type="button" aria-label="Hineinzoomen">+</button>
+          <button class="small-button" id="resetView" type="button">Alles</button>
+        </div>
+      </div>
+      <div class="graph-wrap" id="graphWrap">
+        <canvas id="graph" aria-label="Graphischer Verlauf von Wellen und Pausen"></canvas>
+      </div>
+      <div class="overlay-controls">
+        <label class="check"><input type="checkbox" id="showWater" checked> Blasensprung einblenden</label>
+        <label class="check"><input type="checkbox" id="showNotes" checked> Notizen einblenden</label>
+      </div>
+      <p class="graph-hint">Mit zwei Fingern zoomen, mit einem Finger seitlich verschieben. Notizen und Blasensprünge antippen, um Details zu lesen.</p>
+    </section>
+
+    <h2>Durchschnittswerte</h2>
+    <section class="card">
+      <div class="average-controls">
+        <label for="averageWindow">Zeitraum:</label>
+        <select id="averageWindow">
+          <option value="10">Letzte 10 Minuten</option>
+          <option value="20">Letzte 20 Minuten</option>
+          <option value="30">Letzte 30 Minuten</option>
+          <option value="40">Letzte 40 Minuten</option>
+          <option value="50">Letzte 50 Minuten</option>
+          <option value="60">Letzte 60 Minuten</option>
+        </select>
+      </div>
+      <div class="avg-grid">
+        <div class="avg"><span>Ø Welle</span><strong id="avgWave">—</strong></div>
+        <div class="avg"><span>Ø Pause</span><strong id="avgPause">—</strong></div>
+        <div class="avg"><span>Ø Abstand</span><strong id="avgInterval">—</strong></div>
+      </div>
+    </section>
+
+    <h2>Wellendaten</h2>
+    <section class="card">
+      <div class="event-inputs">
+        <button class="water-button" id="addWater" type="button">Blasensprung dokumentieren</button>
+        <div class="note-input">
+          <textarea id="noteText" rows="2" placeholder="Notiz eintragen (z. B. Position, Befinden) …"></textarea>
+          <button class="note-button" id="addNote" type="button">Notiz speichern</button>
+        </div>
+      </div>
+      <details id="recordsDetails">
+        <summary id="recordsSummary">Wellendaten anzeigen</summary>
+        <div class="list" id="recordsList"></div>
+      </details>
+    </section>
+
+    <h2>Messungshistorie</h2>
+    <section class="card">
+      <details id="historyDetails">
+        <summary id="historySummary">Gespeicherte Messungen anzeigen</summary>
+        <div class="list" id="historyList"></div>
+      </details>
+    </section>
+
+    <button class="action-button secondary" id="returnCurrent" type="button" hidden>
+      Zur aktuellen Messung
+    </button>
+    <button class="action-button" id="finishSession" type="button">Messung beenden</button>
+    <button class="action-button" id="newSession" type="button">Neue Messung starten</button>
+
+    <button class="action-button secondary" id="helpButton" type="button">ℹ️ Anleitung &amp; Hilfe</button>
+
+    <p class="note">
+      Messungen werden automatisch in diesem Browser gespeichert. Sie können durch das
+      Löschen der Browserdaten oder im privaten Modus verloren gehen. Der Tracker dient der
+      Zeitmessung und ersetzt keine medizinische Einschätzung.
+    </p>
+  </main>
+
+  <dialog class="detail-dialog" id="detailDialog">
+    <div class="dialog-inner">
+      <h3 class="dialog-title" id="dialogTitle"></h3>
+      <p class="dialog-sub" id="dialogSub"></p>
+      <div class="dialog-body" id="dialogBody" hidden></div>
+      <button class="dialog-close" id="dialogClose" type="button">Schließen</button>
+    </div>
+  </dialog>
+
+  <dialog id="helpDialog">
+    <div class="help-head">
+      <h3>Anleitung</h3>
+      <button class="help-close" id="helpClose" type="button">Schließen</button>
+    </div>
+    <div class="help-body">
+      <h4>Wellen aufzeichnen</h4>
+      <ul>
+        <li><strong>Welle starten:</strong> Tippe beim Beginn einer Welle auf den großen Knopf. Der Timer läuft.</li>
+        <li><strong>Welle beenden / Pause:</strong> Ein weiterer Tipp beendet die Welle und startet automatisch die Pause.</li>
+        <li><strong>Nächste Welle:</strong> Während der Pause zeigt der Knopf „Nächste Welle starten" – ein Tipp beendet die Pause und startet die Welle.</li>
+        <li><strong>Lücken:</strong> Nach „Messung beenden" bzw. einer beendeten Phase bleibt der Timer stehen, bis du wieder auf „Welle starten" tippst. Zeiten ohne Aufzeichnung erscheinen im Verlauf als Leerstelle – nichts wird interpoliert oder aufgefüllt.</li>
+      </ul>
+
+      <h4>Statistik &amp; Durchschnittswerte</h4>
+      <p>Oben siehst du die letzte Welle, die letzte Pause und den Abstand der letzten beiden Wellen. Darunter wählbar: gemittelte Werte der letzten 10–60 Minuten.</p>
+
+      <h4>Wellenverlauf (Zeitstrahl)</h4>
+      <ul>
+        <li><strong>Zwei Ansichten:</strong> „Seit Start" zeigt die Zeit seit der ersten Welle (wie bisher); „Uhrzeit" zeigt stattdessen die tatsächliche Uhrzeit der Achsen-Markierungen – so lassen sich Wellen und Pausen der Tageszeit zuordnen.</li>
+        <li>Mit − / + zoomen, „Alles" zeigt den gesamten Verlauf. Zwei Finger zusammen-/auseinander zoomen, ein Finger verschiebt seitlich.</li>
+        <li>Blasensprung (gestrichelte Linie „BS") und Notizen (nummerierte Punkte N1, N2 …) können eingeblendet werden; Antippen öffnet die Details.</li>
+      </ul>
+
+      <h4>Blasensprung &amp; Notizen</h4>
+      <p>„Blasensprung dokumentieren" setzt eine Markierung an der aktuellen Zeit. Über das Textfeld legst du Notizen an (z. B. Position, Befinden). Beides erscheint im Verlauf und in der Liste; dort sind die Einträge auch einzeln löschbar.</p>
+
+      <h4>Messungen verwalten</h4>
+      <ul>
+        <li>„Messung beenden" schließt die Aufzeichnung ab; sie bleibt in der Historie. Per „Welle starten" wird sie fortgesetzt.</li>
+        <li>Über „Öffnen" in der Messungshistorie kannst du alte Messungen ansehen; „Zur aktuellen Messung" bringt dich zurück.</li>
+        <li>Das Schließen des Browsers beendet keine laufende Messung – sie läuft beim nächsten Öffnen weiter.</li>
+      </ul>
+    </div>
+  </dialog>
+
+  <script>
+    (() => {
+      "use strict";
+
+      /* ==========================================================
+         Wellen-Tracker v7.1
+         Erweiterungen (09.11.2026): Neu-Start von Wellen nach
+         "Messung beenden" mit Lücken im Verlauf, Umschalter
+         Dauer-/Uhrzeit-Ansicht im Zeitstrahl, Anleitung & Hilfe.
+         Fix v7.1: Hauptknopf bleibt nach "Messung beenden" aktiv,
+         damit die Messung per "Welle starten" fortgesetzt werden kann.
+         ---------------------------------------------------------- */
+      const AUTHOR_TAG = "Entwickelt von SchrottGott";
+      console.info(AUTHOR_TAG);
+
+      const STORAGE_KEY = "wellen-tracker-sessions-v1";
+      const OLD_STORAGE_KEY = "wellen-tracker-v1";
+      const MIN_VIEW = 10 * 1000;
+      const MAX_VIEW = 24 * 60 * 60 * 1000;
+      const $ = id => document.getElementById(id);
+
+      const canvas = $("graph");
+      const wrap = $("graphWrap");
+      const ctx = canvas.getContext("2d");
+
+      let sessions = [];
+      let currentId = null;
+      let selectedId = null;
+      let viewSpan = 20 * 60 * 1000;
+      let gesture = null;
+
+      // Zeitachsen-Modus des Graphen: "elapsed" (seit erster Welle) oder "clock".
+      let timeMode = "elapsed";
+
+      // Rechter Rand des sichtbaren Ausschnitts als fester Zeitpunkt.
+      // null bedeutet: am Ende folgen (live). So bleibt der Ausschnitt stehen,
+      // solange man nicht ganz rechts ist – auch wenn neue Daten dazukommen.
+      let viewRight = null;
+
+      // Merker aus dem letzten drawGraph für Gesten/Zoom.
+      let lastFirst = 0;
+      let lastRight = 0;
+      let lastCenter = 0;
+      let lastVisibleSpan = viewSpan;
+      let lastDataEnd = 0;
+
+      // Trefferflächen der im Graph angezeigten Notizen und Blasensprünge.
+      let hitTargets = [];
+
+      // Zustand für Tap-Erkennung (Antippen ≠ Verschieben).
+      let touchStart = null;
+
+      function makeId() {
+        return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      }
+
+      function makeSession() {
+        return {
+          id: makeId(),
+          startedAt: Date.now(),
+          endedAt: null,
+          finished: false,
+          segments: [],
+          events: []
+        };
+      }
+
+      function activeSession() {
+        return sessions.find(s => s.id === currentId) || null;
+      }
+
+      function selectedSession() {
+        return sessions.find(s => s.id === selectedId) || activeSession();
+      }
+
+      function isCurrentView() {
+        return selectedId === currentId;
+      }
+
+      function load() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+
+          if (saved && Array.isArray(saved.sessions)) {
+            sessions = saved.sessions
+              .filter(s => s && typeof s.id === "string" && Array.isArray(s.segments))
+              .map(s => ({
+                id: s.id,
+                startedAt: Number.isFinite(s.startedAt) ? s.startedAt : Date.now(),
+                endedAt: Number.isFinite(s.endedAt) ? s.endedAt : null,
+                finished: Boolean(s.finished),
+                segments: s.segments.filter(segment =>
+                  segment &&
+                  (segment.type === "wave" || segment.type === "pause") &&
+                  Number.isFinite(segment.start) &&
+                  (segment.end === null || Number.isFinite(segment.end))
+                ),
+                events: Array.isArray(s.events)
+                  ? s.events.filter(event =>
+                      event &&
+                      (event.type === "water" || event.type === "note") &&
+                      Number.isFinite(event.at)
+                    ).map(event => ({
+                      type: event.type,
+                      at: event.at,
+                      text: typeof event.text === "string" ? event.text : ""
+                    }))
+                  : []
+              }));
+
+            currentId = saved.currentId;
+            if (!sessions.some(s => s.id === currentId)) currentId = null;
+          } else {
+            // Übernimmt vorhandene Messdaten aus der vorherigen Version.
+            const old = JSON.parse(localStorage.getItem(OLD_STORAGE_KEY) || "null");
+            if (old && Array.isArray(old.segments) && old.segments.length) {
+              const migrated = makeSession();
+              migrated.segments = old.segments;
+              const first = migrated.segments.find(s => s.type === "wave");
+              if (first) migrated.startedAt = first.start;
+              sessions.push(migrated);
+              currentId = migrated.id;
+            }
+          }
+        } catch {
+          sessions = [];
+          currentId = null;
+        }
+
+        if (!activeSession()) {
+          const fresh = makeSession();
+          sessions.push(fresh);
+          currentId = fresh.id;
+        }
+
+        selectedId = currentId;
+        save();
+      }
+
+      function save() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({ sessions, currentId }));
+        } catch {
+          $("hint").textContent = "Der Browser konnte die Messung nicht speichern.";
+        }
+      }
+
+      function closeOpenSegment(session, at = Date.now()) {
+        if (!session) return;
+        const open = session.segments.findLast(segment => segment.end === null);
+        if (open) open.end = at;
+      }
+
+      function fmt(ms) {
+        if (!Number.isFinite(ms) || ms < 0) return "—";
+        const sec = Math.floor(ms / 1000);
+        return `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
+      }
+
+      function dateTime(timestamp) {
+        return new Date(timestamp).toLocaleString([], {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+      }
+
+      function timeOfDay(timestamp) {
+        return new Date(timestamp).toLocaleTimeString([], {
+          hour: "2-digit", minute: "2-digit"
+        });
+      }
+
+      function agoLabel(ms) {
+        if (!Number.isFinite(ms) || ms < 0) return "";
+        const sec = Math.floor(ms / 1000);
+        if (sec < 60) return "gerade eben";
+        const min = Math.floor(sec / 60);
+        if (min < 60) return `vor ${min} min`;
+        const h = Math.floor(min / 60);
+        return `vor ${h} h ${String(min % 60).padStart(2, "0")} min`;
+      }
+
+      function waves(session) {
+        return session ? session.segments.filter(s => s.type === "wave") : [];
+      }
+
+      function pauses(session) {
+        return session ? session.segments.filter(s => s.type === "pause") : [];
+      }
+
+      function waterEvents(session) {
+        return session ? (session.events || []).filter(e => e.type === "water") : [];
+      }
+
+      function noteEvents(session) {
+        return session ? (session.events || []).filter(e => e.type === "note") : [];
+      }
+
+      function duration(segment, now = Date.now()) {
+        return Math.max(0, (segment.end ?? now) - segment.start);
+      }
+
+      function average(values) {
+        return values.length
+          ? values.reduce((sum, value) => sum + value, 0) / values.length
+          : null;
+      }
+
+      function renderCurrent(now) {
+        const session = selectedSession();
+        const currentView = isCurrentView();
+        const segments = session?.segments || [];
+        const active = segments.findLast(s => s.end === null);
+        const isWave = currentView && active?.type === "wave";
+        const isPause = currentView && active?.type === "pause";
+        const sessionFinished = currentView && Boolean(session?.finished);
+
+        $("sessionDate").textContent = session
+          ? `Beginn: ${dateTime(session.startedAt)}${session.endedAt ? ` · beendet: ${dateTime(session.endedAt)}` : ""}`
+          : "";
+
+        $("viewingBanner").hidden = currentView;
+        $("viewingBanner").textContent = currentView
+          ? ""
+          : "Du siehst eine gespeicherte Messung. Sie kann hier nicht verändert werden.";
+
+        $("phase").textContent = !currentView
+          ? (session?.finished ? "Messung beendet" : "Gespeicherte Messung")
+          : isWave
+            ? "Welle läuft"
+            : isPause
+              ? "Wellenpause"
+              : sessionFinished
+                ? "Messung beendet – fortsetzbar"
+                : "Bereit";
+
+        $("timer").textContent = isWave ? fmt(now - active.start) : "00:00";
+
+        const toggle = $("toggle");
+        // v7.1: Auch nach "Messung beenden" aktiv, damit fortgesetzt werden kann.
+        toggle.disabled = !currentView;
+        toggle.textContent = isWave
+          ? "Welle beenden"
+          : isPause
+            ? "Nächste Welle starten"
+            : "Welle starten";
+
+        toggle.classList.toggle("pause-mode", isPause);
+        $("hint").textContent = !currentView
+          ? "Wechsle zurück zur aktuellen Messung, um weiter aufzuzeichnen."
+          : isWave
+            ? "Tippe am Ende der Welle erneut."
+            : isPause
+              ? "Der Timer steht während der Pause. Tippe beim Beginn der nächsten Welle."
+              : sessionFinished
+                ? "Diese Messung war beendet – tippe „Welle starten", um sie fortzusetzen. Die Zwischenzeit bleibt frei."
+                : "Tippe beim Beginn einer Welle auf den Knopf.";
+
+        $("finishSession").disabled = !currentView || sessionFinished;
+        $("finishSession").textContent = sessionFinished ? "Messung beendet" : "Messung beenden";
+        $("returnCurrent").hidden = currentView;
+
+        const waterButton = $("addWater");
+        waterButton.disabled = !currentView || sessionFinished;
+        waterButton.textContent = sessionFinished && currentView
+          ? "Messung beendet"
+          : "Blasensprung dokumentieren";
+        $("noteText").disabled = !currentView || sessionFinished;
+        $("addNote").disabled = !currentView || sessionFinished;
+
+        const ws = waves(session);
+        const ps = pauses(session);
+        const lastWave = ws.at(-1);
+        const lastPause = ps.at(-1);
+        const interval = ws.length >= 2
+          ? ws.at(-1).start - ws.at(-2).start
+          : null;
+
+        $("lastWave").textContent = lastWave ? fmt(duration(lastWave, now)) : "—";
+        $("lastPause").textContent = lastPause ? fmt(duration(lastPause, now)) : "—";
+        $("lastInterval").textContent = interval === null ? "—" : fmt(interval);
+
+        const lastWater = waterEvents(session).at(-1);
+        const waterStatus = $("waterStatus");
+        if (lastWater) {
+          waterStatus.hidden = false;
+          waterStatus.textContent =
+            `Blasensprung: ${timeOfDay(lastWater.at)} Uhr · ${agoLabel(now - lastWater.at)}`;
+        } else {
+          waterStatus.hidden = true;
+        }
+
+        renderAverages(session, now);
+      }
+
+      function renderAverages(session, now) {
+        if (!session) {
+          $("avgWave").textContent = "—";
+          $("avgPause").textContent = "—";
+          $("avgInterval").textContent = "—";
+          return;
+        }
+
+        const windowMs = Number($("averageWindow").value) * 60 * 1000;
+        const from = now - windowMs;
+        const ws = waves(session);
+        const ps = pauses(session);
+
+        const waveValues = ws
+          .filter(s => s.start >= from && s.end !== null)
+          .map(s => duration(s, now));
+
+        const pauseValues = ps
+          .filter(s => s.start >= from && s.end !== null)
+          .map(s => duration(s, now));
+
+        const intervalValues = [];
+        for (let i = 1; i < ws.length; i++) {
+          if (ws[i].start >= from) intervalValues.push(ws[i].start - ws[i - 1].start);
+        }
+
+        $("avgWave").textContent = fmt(average(waveValues));
+        $("avgPause").textContent = fmt(average(pauseValues));
+        $("avgInterval").textContent = fmt(average(intervalValues));
+      }
+
+      function renderList(session, now) {
+        const list = $("recordsList");
+        const ws = waves(session);
+        const water = waterEvents(session);
+        const notes = noteEvents(session);
+        const editable = isCurrentView() && !session?.finished;
+
+        $("recordsSummary").textContent =
+          `Wellendaten anzeigen (${ws.length}${water.length ? ` · ${water.length} Blasensprung${water.length > 1 ? "e" : ""}` : ""}${notes.length ? ` · ${notes.length} Notiz${notes.length > 1 ? "en" : ""}` : ""})`;
+
+        if (!ws.length && !water.length && !notes.length) {
+          list.innerHTML = '<div class="empty">Noch keine Wellen aufgezeichnet.</div>';
+          return;
+        }
+
+        const items = [];
+
+        ws.forEach((wave, index) => {
+          items.push({ kind: "wave", at: wave.start, wave, num: index + 1 });
+        });
+
+        water.forEach((event, index) => {
+          items.push({ kind: "water", at: event.at, event, num: index + 1 });
+        });
+
+        notes.forEach((event, index) => {
+          items.push({ kind: "note", at: event.at, event, num: index + 1 });
+        });
+
+        items.sort((a, b) => b.at - a.at);
+
+        list.innerHTML = items.map(item => {
+          const time = timeOfDay(item.at);
+
+          if (item.kind === "wave") {
+            const length = item.wave.end === null ? "läuft" : fmt(item.wave.end - item.wave.start);
+            return `
+              <div class="wave-row">
+                <div class="wave-info">
+                  <div class="wave-title">Welle ${item.num} · ${time}</div>
+                  <div class="wave-detail">Dauer: ${length}</div>
+                </div>
+                ${editable
+                  ? `<button class="delete-button" type="button" data-delete-wave="${item.wave.start}">Löschen</button>`
+                  : ""}
+              </div>
+            `;
+          }
+
+          if (item.kind === "water") {
+            return `
+              <div class="wave-row water-row">
+                <div class="wave-info">
+                  <div class="wave-title">Blasensprung · ${time} Uhr</div>
+                  <div class="wave-detail">${agoLabel(now - item.at)}</div>
+                </div>
+                ${editable
+                  ? `<button class="delete-button water-delete" type="button" data-delete-water="${item.at}">Löschen</button>`
+                  : ""}
+              </div>
+            `;
+          }
+
+          return `
+            <div class="wave-row note-row">
+              <div class="wave-info">
+                <div class="wave-title">Notiz N${item.num} · ${time} Uhr</div>
+                <div class="wave-detail note-text">${escapeHtml(item.event.text)}</div>
+              </div>
+              ${editable
+                ? `<button class="delete-button" type="button" data-delete-note="${item.at}">Löschen</button>`
+                : ""}
+            </div>
+          `;
+        }).join("");
+
+        list.querySelectorAll("[data-delete-wave]").forEach(button => {
+          button.addEventListener("click", () => deleteWave(Number(button.dataset.deleteWave)));
+        });
+        list.querySelectorAll("[data-delete-water]").forEach(button => {
+          button.addEventListener("click", () => deleteEvent("water", Number(button.dataset.deleteWater)));
+        });
+        list.querySelectorAll("[data-delete-note]").forEach(button => {
+          button.addEventListener("click", () => deleteEvent("note", Number(button.dataset.deleteNote)));
+        });
+      }
+
+      function escapeHtml(text) {
+        return text
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;");
+      }
+
+      function renderHistory() {
+        const list = $("historyList");
+        const ordered = [...sessions].sort((a, b) => b.startedAt - a.startedAt);
+
+        $("historySummary").textContent = `Gespeicherte Messungen anzeigen (${sessions.length})`;
+
+        if (!ordered.length) {
+          list.innerHTML = '<div class="empty">Noch keine gespeicherten Messungen.</div>';
+          return;
+        }
+
+        list.innerHTML = ordered.map(session => {
+          const isCurrent = session.id === currentId;
+          const isSelected = session.id === selectedId;
+          const label = isCurrent ? "Aktuell" : session.finished ? "Beendet" : "Gespeichert";
+          const count = waves(session).length;
+          const extras = [
+            waterEvents(session).length ? `${waterEvents(session).length}× Blasensprung` : "",
+            noteEvents(session).length ? `${noteEvents(session).length} Notiz(en)` : ""
+          ].filter(Boolean).join(" · ");
+
+          return `
+            <div class="history-row">
+              <div class="history-info">
+                <div class="history-title">${dateTime(session.startedAt)}</div>
+                <div class="history-detail">${label} · ${count} Wellen${extras ? ` · ${extras}` : ""}</div>
+              </div>
+              <button class="history-button" type="button" data-open="${session.id}" ${isSelected ? "disabled" : ""}>
+                ${isSelected ? "Angezeigt" : "Öffnen"}
+              </button>
+            </div>
+          `;
+        }).join("");
+
+        list.querySelectorAll("[data-open]").forEach(button => {
+          button.addEventListener("click", () => {
+            selectedId = button.dataset.open;
+            viewRight = null;
+            render();
+          });
+        });
+      }
+
+      function deleteWave(start) {
+        const session = activeSession();
+        if (!session || !isCurrentView() || session.finished) return;
+
+        const ws = waves(session);
+        const index = ws.findIndex(w => w.start === start);
+        if (index < 0) return;
+
+        if (!confirm("Diese Welle löschen? Ihre Dauer und die folgende Pause werden der vorherigen Pause zugeschlagen, falls eine vorhanden ist.")) {
+          return;
+        }
+
+        const wave = ws[index];
+        const previousWave = ws[index - 1];
+        const nextWave = ws[index + 1];
+
+        const previousPause = previousWave
+          ? session.segments.find(s =>
+              s.type === "pause" &&
+              s.start >= (previousWave.end ?? previousWave.start) &&
+              s.start < wave.start
+            )
+          : null;
+
+        const followingPause = session.segments.find(s =>
+          s.type === "pause" &&
+          s.start >= (wave.end ?? wave.start) &&
+          (!nextWave || s.start < nextWave.start)
+        );
+
+        if (previousPause) {
+          previousPause.end = followingPause
+            ? followingPause.end
+            : wave.end;
+        }
+
+        const remove = new Set([wave]);
+        if (followingPause) remove.add(followingPause);
+
+        if (!previousWave && !previousPause) {
+          const leadingPause = session.segments.find(s =>
+            s.type === "pause" && s.end !== null && s.end <= wave.start
+          );
+          if (leadingPause) remove.add(leadingPause);
+        }
+
+        session.segments = session.segments.filter(s => !remove.has(s));
+        save();
+        render();
+      }
+
+      function deleteEvent(type, at) {
+        const session = activeSession();
+        if (!session || !isCurrentView() || session.finished) return;
+
+        const label = type === "water" ? "Diesen Blasensprung" : "Diese Notiz";
+        if (!confirm(`${label} löschen?`)) return;
+
+        session.events = (session.events || []).filter(
+          e => !(e.type === type && e.at === at)
+        );
+        save();
+        render();
+      }
+
+      function addWater() {
+        const session = activeSession();
+        if (!session || selectedId !== currentId || session.finished) return;
+
+        session.events = session.events || [];
+        session.events.push({ type: "water", at: Date.now(), text: "" });
+        save();
+        render();
+        $("recordsDetails").open = true;
+      }
+
+      function addNote() {
+        const session = activeSession();
+        if (!session || selectedId !== currentId || session.finished) return;
+
+        const field = $("noteText");
+        const text = field.value.trim();
+        if (!text) {
+          field.focus();
+          return;
+        }
+
+        session.events = session.events || [];
+        session.events.push({ type: "note", at: Date.now(), text });
+        field.value = "";
+        save();
+        render();
+        $("recordsDetails").open = true;
+      }
+
+      function openDetailDialog(target, now) {
+        const title = $("dialogTitle");
+        const sub = $("dialogSub");
+        const body = $("dialogBody");
+
+        if (target.type === "note") {
+          title.textContent = `Notiz N${target.num} · ${timeOfDay(target.event.at)} Uhr`;
+          sub.textContent = agoLabel(now - target.event.at);
+          body.hidden = false;
+          body.textContent = target.event.text || "(Kein Text)";
+        } else {
+          title.textContent = `Blasensprung · ${timeOfDay(target.event.at)} Uhr`;
+          sub.textContent = agoLabel(now - target.event.at);
+          body.hidden = true;
+          body.textContent = "";
+        }
+
+        $("detailDialog").showModal();
+      }
+
+      function axisLabel(mode, elapsedMs, absoluteTs) {
+        if (mode === "clock") {
+          const d = new Date(absoluteTs);
+          const hh = String(d.getHours()).padStart(2, "0");
+          const mm = String(d.getMinutes()).padStart(2, "0");
+          return `${hh}:${mm}`;
+        }
+        const seconds = Math.max(0, Math.floor(elapsedMs / 1000));
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        const remainder = seconds % 60;
+
+        if (hours > 0) {
+          return `${hours}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
+        }
+        if (minutes > 0) {
+          return `${minutes}:${String(remainder).padStart(2, "0")} min`;
+        }
+        return `${remainder} sec`;
+      }
+
+      function resizeCanvas() {
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = Math.max(1, Math.round(rect.width * dpr));
+        canvas.height = Math.max(1, Math.round(rect.height * dpr));
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        drawGraph(Date.now());
+      }
+
+      function drawGraph(now) {
+        const session = selectedSession();
+        const segments = session?.segments || [];
+        const rect = canvas.getBoundingClientRect();
+        const w = rect.width;
+        const h = rect.height;
+        if (!w || !h) return;
+
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = "#fffdfb";
+        ctx.fillRect(0, 0, w, h);
+
+        hitTargets = [];
+
+        if (!segments.length) {
+          ctx.fillStyle = "#796b65";
+          ctx.font = "14px system-ui, sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText("Dein Verlauf erscheint hier", w / 2, h / 2);
+          return;
+        }
+
+        const first = Math.min(...segments.map(s => s.start));
+        const dataEnd = Math.max(
+          session.finished ? (session.endedAt || now) : now,
+          ...segments.map(s => s.end ?? now)
+        );
+        const available = Math.max(0, dataEnd - first);
+        const visibleSpan = Math.min(viewSpan, Math.max(available, 1));
+
+        // Rechter Rand: entweder am live Ende folgen oder am gesetzten
+        // Zeitanker bleiben (statischer Ausschnitt), höchstens bis zum Datenende.
+        let right = viewRight === null ? dataEnd : Math.min(viewRight, dataEnd);
+        let left = Math.max(first, right - visibleSpan);
+
+        // Nicht weiter nach links als bis zum Messungsbeginn ziehen.
+        if (viewRight !== null) viewRight = Math.max(viewRight, first + visibleSpan);
+
+        const actualSpan = Math.max(1, right - left);
+
+        // Merker für Gesten und Zoom (Mitte bleibt beim Zoomen erhalten).
+        lastFirst = first;
+        lastRight = right;
+        lastCenter = (left + right) / 2;
+        lastVisibleSpan = visibleSpan;
+        lastDataEnd = dataEnd;
+
+        const padL = 14;
+        const padR = 14;
+        const chartW = w - padL - padR;
+        const mapX = time => padL + ((time - left) / actualSpan) * chartW;
+        const y = 56;
+        const barH = 38;
+
+        ctx.strokeStyle = "#eee4dc";
+        ctx.lineWidth = 1;
+        ctx.fillStyle = "#796b65";
+        ctx.font = "11px system-ui, sans-serif";
+        ctx.textAlign = "center";
+
+        const divisions = 4;
+        for (let i = 0; i <= divisions; i++) {
+          const x = padL + chartW * i / divisions;
+          ctx.beginPath();
+          ctx.moveTo(x, 32);
+          ctx.lineTo(x, 132);
+          ctx.stroke();
+
+          const time = left + actualSpan * i / divisions;
+          ctx.fillText(axisLabel(timeMode, time - first, time), x, 155);
+        }
+
+        ctx.fillStyle = "#f0e7e0";
+        ctx.beginPath();
+        ctx.roundRect(padL, y, chartW, barH, 9);
+        ctx.fill();
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(padL, y, chartW, barH, 9);
+        ctx.clip();
+
+        for (const segment of segments) {
+          const end = segment.end ?? session.endedAt ?? now;
+          const x1 = mapX(segment.start);
+          const x2 = mapX(end);
+          if (x2 < padL || x1 > w - padR) continue;
+
+          ctx.fillStyle = segment.type === "wave" ? "#bd6553" : "#d9b989";
+          ctx.fillRect(x1, y, Math.max(2, x2 - x1), barH);
+        }
+        ctx.restore();
+
+        // Blasensprung als dezentblaue gestrichelte Linie einblenden.
+        if ($("showWater").checked) {
+          ctx.textAlign = "center";
+          const waters = waterEvents(session);
+          for (let wIndex = 0; wIndex < waters.length; wIndex++) {
+            const event = waters[wIndex];
+            if (event.at < left || event.at > right) continue;
+            const x = mapX(event.at);
+            if (x < padL || x > w - padR) continue;
+
+            ctx.save();
+            ctx.strokeStyle = "#8aa9c6";
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 4]);
+            ctx.beginPath();
+            ctx.moveTo(x, y - 8);
+            ctx.lineTo(x, y + barH + 6);
+            ctx.stroke();
+            ctx.restore();
+
+            ctx.fillStyle = "#7d9bb8";
+            ctx.font = "bold 10px system-ui, sans-serif";
+            ctx.fillText("BS", x, y - 13);
+
+            // Breite vertikale Trefferfläche entlang der gestrichelten Linie.
+            hitTargets.push({
+              type: "water",
+              event,
+              num: wIndex + 1,
+              x,
+              top: y - 28,
+              bottom: y + barH + 14,
+              halfWidth: 30
+            });
+          }
+        }
+
+        // Notizen als nummerierte Punkte unterhalb des Balkens einblenden.
+        if ($("showNotes").checked) {
+          const notes = noteEvents(session);
+          ctx.font = "10px system-ui, sans-serif";
+          for (let nIndex = 0; nIndex < notes.length; nIndex++) {
+            const event = notes[nIndex];
+            if (event.at < left || event.at > right) continue;
+            const x = mapX(event.at);
+            if (x < padL || x > w - padR) continue;
+
+            ctx.fillStyle = "#a3814f";
+            ctx.beginPath();
+            ctx.arc(x, y + barH + 12, 4, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = "#7a6a52";
+            ctx.textAlign = "left";
+            ctx.fillText(`N${nIndex + 1}`, x + 7, y + barH + 16);
+
+            // Große runde Trefferfläche um den Notizpunkt.
+            hitTargets.push({
+              type: "note",
+              event,
+              num: nIndex + 1,
+              x,
+              y: y + barH + 12,
+              radius: 34
+            });
+          }
+        }
+
+        ctx.fillStyle = "#796b65";
+        ctx.font = "11px system-ui, sans-serif";
+        ctx.textAlign = "left";
+        ctx.fillText(
+          timeMode === "clock" ? "Uhrzeit" : "Zeit seit erster Welle",
+          padL, 177
+        );
+      }
+
+      function findHitTarget(clientX, clientY) {
+        if (!hitTargets.length) return null;
+
+        const rect = canvas.getBoundingClientRect();
+        const px = clientX - rect.left;
+        const py = clientY - rect.top;
+
+        // Wasser-Linien zuerst prüfen, damit überlappende Notizpunkte nicht gewinnen.
+        for (const target of hitTargets) {
+          if (target.type !== "water") continue;
+          if (
+            Math.abs(px - target.x) <= target.halfWidth &&
+            py >= target.top && py <= target.bottom
+          ) {
+            return target;
+          }
+        }
+
+        for (const target of hitTargets) {
+          if (target.type !== "note") continue;
+          if (Math.hypot(px - target.x, py - target.y) <= target.radius) {
+            return target;
+          }
+        }
+
+        // Fallback: nächstgelegene Trefferfläche innerhalb eines Extra-Randbereichs.
+        let best = null;
+        let bestDistance = Infinity;
+
+        for (const target of hitTargets) {
+          let distance;
+          if (target.type === "water") {
+            if (py < target.top || py > target.bottom) continue;
+            distance = Math.abs(px - target.x);
+          } else {
+            distance = Math.hypot(px - target.x, py - target.y);
+          }
+
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            best = target;
+          }
+        }
+
+        if (best && bestDistance <= 14) return best;
+        return null;
+      }
+
+      function handleTap(clientX, clientY) {
+        const target = findHitTarget(clientX, clientY);
+        if (target) openDetailDialog(target, Date.now());
+      }
+
+      function render() {
+        const now = Date.now();
+        const session = selectedSession();
+        renderCurrent(now);
+        renderList(session, now);
+        renderHistory();
+        drawGraph(now);
+      }
+
+      $("toggle").addEventListener("click", () => {
+        const session = activeSession();
+        if (!session || selectedId !== currentId) return;
+
+        const now = Date.now();
+        const active = session.segments.findLast(s => s.end === null);
+
+        if (!active) {
+          // Neue Welle beginnen – auch nach "Messung beenden" (v7.1).
+          // Der beendete Status wird aufgehoben; die Zwischenzeit bleibt
+          // als Lücke im Verlauf, ohne aufgefüllt zu werden.
+          session.finished = false;
+          session.endedAt = null;
+          session.segments.push({ type: "wave", start: now, end: null });
+        } else if (active.type === "wave") {
+          active.end = now;
+          session.segments.push({ type: "pause", start: now, end: null });
+        } else {
+          active.end = now;
+          session.segments.push({ type: "wave", start: now, end: null });
+        }
+
+        viewRight = null;
+        save();
+        render();
+      });
+
+      $("averageWindow").addEventListener("change", render);
+      $("addWater").addEventListener("click", addWater);
+      $("addNote").addEventListener("click", addNote);
+      $("showWater").addEventListener("change", () => drawGraph(Date.now()));
+      $("showNotes").addEventListener("change", () => drawGraph(Date.now()));
+
+      // Umschalter: Dauer seit Start ↔ Uhrzeit
+      function setTimeMode(mode) {
+        timeMode = mode;
+        $("modeElapsed").classList.toggle("active", mode === "elapsed");
+        $("modeClock").classList.toggle("active", mode === "clock");
+        drawGraph(Date.now());
+      }
+      $("modeElapsed").addEventListener("click", () => setTimeMode("elapsed"));
+      $("modeClock").addEventListener("click", () => setTimeMode("clock"));
+
+      function zoomBy(factor) {
+        viewSpan = Math.max(MIN_VIEW, Math.min(MAX_VIEW, viewSpan * factor));
+
+        // Die Mitte des aktuellen Ausschnitts bleibt beim Zoomen erhalten,
+        // statt zum Ende der Zeitskala zu springen.
+        if (lastDataEnd) {
+          const target = lastCenter + viewSpan / 2;
+          viewRight = target >= lastDataEnd ? null : target;
+        }
+
+        drawGraph(Date.now());
+      }
+
+      $("zoomIn").addEventListener("click", () => zoomBy(1 / 1.5));
+      $("zoomOut").addEventListener("click", () => zoomBy(1.5));
+
+      $("resetView").addEventListener("click", () => {
+        const session = selectedSession();
+        const segments = session?.segments || [];
+        if (!segments.length) return;
+
+        const first = Math.min(...segments.map(s => s.start));
+        const end = session.finished ? (session.endedAt || Date.now()) : Date.now();
+        viewSpan = Math.max(MIN_VIEW, Math.min(MAX_VIEW, end - first));
+        viewRight = null;
+        drawGraph(Date.now());
+      });
+
+      wrap.addEventListener("touchstart", event => {
+        if (event.touches.length === 2) {
+          const distance = Math.hypot(
+            event.touches[0].clientX - event.touches[1].clientX,
+            event.touches[0].clientY - event.touches[1].clientY
+          );
+          gesture = {
+            type: "pinch",
+            distance,
+            span: viewSpan,
+            center: lastCenter
+          };
+          touchStart = null;
+        } else if (event.touches.length === 1) {
+          gesture = {
+            type: "pan",
+            x: event.touches[0].clientX,
+            right: lastRight,
+            minRight: lastFirst + lastVisibleSpan
+          };
+          touchStart = {
+            x: event.touches[0].clientX,
+            y: event.touches[0].clientY,
+            time: Date.now()
+          };
+        }
+      }, { passive: false });
+
+      wrap.addEventListener("touchmove", event => {
+        if (!gesture) return;
+        event.preventDefault();
+
+        if (event.touches.length === 2 && gesture.type === "pinch") {
+          const distance = Math.hypot(
+            event.touches[0].clientX - event.touches[1].clientX,
+            event.touches[0].clientY - event.touches[1].clientY
+          );
+          const ratio = gesture.distance / Math.max(1, distance);
+          viewSpan = Math.max(MIN_VIEW, Math.min(MAX_VIEW, gesture.span * ratio));
+
+          // Auch beim Pinch-Zoom bleibt die Mitte des Ausschnitts erhalten.
+          if (lastDataEnd) {
+            const target = gesture.center + viewSpan / 2;
+            viewRight = target >= lastDataEnd ? null : target;
+          }
+
+          drawGraph(Date.now());
+        } else if (event.touches.length === 1 && gesture.type === "pan") {
+          const dx = event.touches[0].clientX - gesture.x;
+          const msPerPixel = viewSpan / Math.max(1, canvas.clientWidth);
+          viewRight = Math.max(gesture.minRight, gesture.right - dx * msPerPixel);
+          drawGraph(Date.now());
+        }
+      }, { passive: false });
+
+      wrap.addEventListener("touchend", event => {
+        if (
+          gesture?.type === "pan" &&
+          touchStart &&
+          event.changedTouches.length === 1
+        ) {
+          const dx = event.changedTouches[0].clientX - touchStart.x;
+          const dy = event.changedTouches[0].clientY - touchStart.y;
+          const moved = Math.hypot(dx, dy);
+          const elapsed = Date.now() - touchStart.time;
+
+          // Kaum Bewegung ⇒ als Antippen werten (Schwelle bewusst großzügig).
+          if (moved < 14 && elapsed < 600) {
+            handleTap(event.changedTouches[0].clientX, event.changedTouches[0].clientY);
+            // Verhindert den darauffolgenden synthetischen Klick (Doppel-Auslösung).
+            event.preventDefault();
+          }
+        }
+
+        gesture = null;
+        touchStart = null;
+      }, { passive: false });
+
+      wrap.addEventListener("touchcancel", () => {
+        gesture = null;
+        touchStart = null;
+      });
+
+      // Klick mit der Maus (Desktop) ebenfalls als Antippen werten.
+      wrap.addEventListener("click", event => {
+        handleTap(event.clientX, event.clientY);
+      });
+
+      $("dialogClose").addEventListener("click", () => {
+        $("detailDialog").close();
+      });
+
+      $("detailDialog").addEventListener("click", event => {
+        // Klick auf die dunkle Fläche außerhalb des Dialogs schließt ihn.
+        if (event.target === $("detailDialog")) $("detailDialog").close();
+      });
+
+      const helpDialog = $("helpDialog");
+      $("helpButton").addEventListener("click", () => helpDialog.showModal());
+      $("helpClose").addEventListener("click", () => helpDialog.close());
+      helpDialog.addEventListener("click", event => {
+        if (event.target === helpDialog) helpDialog.close();
+      });
+
+      $("finishSession").addEventListener("click", () => {
+        const session = activeSession();
+        if (!session || selectedId !== currentId || session.finished) return;
+
+        if (!confirm("Die aktuelle Messung beenden? Sie bleibt in der Historie gespeichert. Per „Welle starten" kann sie später fortgesetzt werden.")) return;
+
+        const now = Date.now();
+        closeOpenSegment(session, now);
+        session.finished = true;
+        session.endedAt = now;
+        save();
+        render();
+      });
+
+      $("newSession").addEventListener("click", () => {
+        const oldSession = activeSession();
+
+        if (!confirm("Eine neue Messung starten? Die bisherige Messung wird gespeichert und bleibt in der Historie erhalten.")) {
+          return;
+        }
+
+        if (oldSession && !oldSession.finished) {
+          const now = Date.now();
+          closeOpenSegment(oldSession, now);
+          oldSession.finished = true;
+          oldSession.endedAt = now;
+        }
+
+        const fresh = makeSession();
+        sessions.push(fresh);
+        currentId = fresh.id;
+        selectedId = fresh.id;
+        viewRight = null;
+        viewSpan = 20 * 60 * 1000;
+        save();
+        render();
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+
+      $("returnCurrent").addEventListener("click", () => {
+        selectedId = currentId;
+        viewRight = null;
+        render();
+      });
+
+      window.addEventListener("resize", resizeCanvas);
+
+      load();
+      resizeCanvas();
+      render();
+      window.setInterval(render, 500);
+    })();
+  </script>
+</body>
+</html>
