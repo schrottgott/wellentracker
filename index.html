@@ -1108,10 +1108,13 @@
                 '<div class="history-detail">' + label + ' · ' + count + ' Wellen' +
                   (extras.length ? " · " + extras.join(" · ") : "") + '</div>' +
               '</div>' +
-              '<button class="history-button" type="button" data-open="' + session.id + '"' +
-                (isSelected ? " disabled" : "") + '>' +
-                (isSelected ? "Angezeigt" : "Öffnen") +
-              '</button>' +
+              '<div style="display:flex;gap:6px;flex:0 0 auto">' +
+                '<button class="history-button" type="button" data-open="' + session.id + '"' +
+                  (isSelected ? " disabled" : "") + '>' +
+                  (isSelected ? "Angezeigt" : "Öffnen") +
+                '</button>' +
+                '<button class="delete-button" type="button" data-del="' + session.id + '">Löschen</button>' +
+              '</div>' +
             '</div>';
         }
 
@@ -1125,7 +1128,45 @@
             render();
           });
         }
+		
+		var delButtons = list.querySelectorAll("[data-del]");
+        for (var k = 0; k < delButtons.length; k++) {
+          delButtons[k].addEventListener("click", function () {
+            deleteHistory(this.getAttribute("data-del"));
+          });
+        }
       }
+	  
+	  function deleteHistory(id) {
+		var session = null;
+		for (var i = 0; i < sessions.length; i++) {
+		  if (sessions[i].id === id) { session = sessions[i]; break; }
+		}
+		if (!session) return;
+
+		var isCurrent = session.id === currentId;
+		if (!confirm("Diese Messung (Beginn " + dateTime(session.startedAt) + ") endgültig löschen? Dies kann nicht rückgängig gemacht werden.")) {
+		  return;
+		}
+
+		var kept = [];
+		for (var j = 0; j < sessions.length; j++) {
+		  if (sessions[j].id !== id) kept.push(sessions[j]);
+		}
+		sessions = kept;
+
+		if (isCurrent) {
+		  if (!sessions.length) {
+			var fresh = makeSession();
+			sessions.push(fresh);
+		  }
+		  currentId = sessions[sessions.length - 1].id;
+		}
+		if (selectedId === id) selectedId = currentId;
+
+		save();
+		render();
+	  }
 
       function deleteWave(start) {
         var session = activeSession();
