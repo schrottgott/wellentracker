@@ -3,15 +3,19 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta name="theme-color" content="#f6eee7">
+  <meta name="theme-color" content="#f6eee7" id="metaThemeColor">
   <title>Wellen-Tracker</title>
   <!--
     ============================================================
-    Wellen-Tracker · Version 7.2 (Kompatibilitäts-Fix)
-    Datum: 09.11.2026
+    Wellen-Tracker · Version 10 (Dark Mode)
+    Datum: 11.11.2026
     Entwickelt von: Lumo (Proton) im Auftrag von SchrottGott
-    - Ersetzt findLast, .at(), replaceAll, roundRect durch kompatible Alternativen
-    - Eingebauter Selbsttest: Laufzeitfehler erscheinen als rote Meldung oben
+    Neu in v10 (aufbauend auf v9 / v7.2 mit allen Einbauten):
+    - Dark Mode mit 3 Modi: Manuell (Standard), Zeitfenster, OS folgen
+    - Schnellumschalter (Mond/Sonne) im Kopf, immer erreichbar
+    - Sanfter Farbwechsel (Transition) statt abruptem Umsprung
+    - Zeitstrahl und alle Elemente folgen dem Theme
+    - Theme-Einstellung wird mit den Messdaten gespeichert
     ============================================================
   -->
   <style>
@@ -27,6 +31,50 @@
       --button: #9d7650;
       --water: #7d9bb8;
       --note: #a3814f;
+      --surface: #fffdfb;
+      --soft: #f7eee7;
+      --btn-bg: white;
+      --water-bg: #eef3f8;
+      --water-border: #cfdcec;
+      --water-ink: #46647f;
+      --water-row: #f4f8fc;
+      --note-bg: #fdf9f1;
+      --note-border: #e8dcc4;
+      --danger-border: #e7c9c1;
+      --danger-bg: #fff5f2;
+      --danger-ink: #8b3e31;
+      --backdrop: #342a2788;
+      --track: #f0e7e0;
+      --shadow-card: #4a30200a;
+    }
+
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #1c1714;
+      --card: #29221e;
+      --ink: #f0e7df;
+      --muted: #a3938a;
+      --wave: #c97a67;
+      --pause: #c9a877;
+      --line: #3d342e;
+      --button: #b08863;
+      --water: #7d9bb8;
+      --note: #b9955e;
+      --surface: #211b17;
+      --soft: #241d19;
+      --btn-bg: #332b26;
+      --water-bg: #24303c;
+      --water-border: #3c4d5e;
+      --water-ink: #a9c3da;
+      --water-row: #26313d;
+      --note-bg: #31281e;
+      --note-border: #55462c;
+      --danger-border: #5d423b;
+      --danger-bg: #3a2723;
+      --danger-ink: #e8a596;
+      --backdrop: #000000aa;
+      --track: #352c25;
+      --shadow-card: #00000033;
     }
 
     * { box-sizing: border-box; }
@@ -37,6 +85,14 @@
       background: var(--bg);
       color: var(--ink);
       font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+
+    /* v10: sanfter Theme-Übergang statt abruptem Umsprung */
+    body, .card, button, select, textarea, dialog, .wave-row, .history-row,
+    .graph-wrap, .stat, .avg, .small-button, .help-head, .help-close,
+    .dialog-close, .viewing-banner {
+      transition: background-color .45s ease, border-color .45s ease,
+                  color .45s ease, box-shadow .45s ease;
     }
 
     #fatalError {
@@ -57,17 +113,33 @@
       padding: 26px 18px 38px;
     }
 
-    header { margin-bottom: 22px; text-align: center; }
+    header { margin-bottom: 22px; text-align: center; position: relative; }
     h1 { margin: 0 0 5px; font-size: 1.65rem; }
     header p, .muted { color: var(--muted); }
     header p { margin: 0; }
+
+    /* v10: Schnellumschalter hell/dunkel */
+    .theme-quick {
+      position: absolute;
+      top: -2px;
+      right: 0;
+      min-width: 46px;
+      min-height: 46px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: var(--btn-bg);
+      color: var(--ink);
+      font-size: 1.15rem;
+      line-height: 1;
+    }
 
     .card {
       padding: 20px;
       border: 1px solid var(--line);
       border-radius: 21px;
       background: var(--card);
-      box-shadow: 0 8px 24px #4a30200a;
+      box-shadow: 0 8px 24px var(--shadow-card);
     }
 
     .current { text-align: center; }
@@ -116,7 +188,7 @@
       min-width: 0;
       padding: 12px 6px;
       border-radius: 13px;
-      background: #f7eee7;
+      background: var(--soft);
     }
 
     .stat span { display: block; color: var(--muted); font-size: .75rem; }
@@ -131,8 +203,8 @@
       margin: 13px 0 0;
       padding: 9px 12px;
       border-radius: 12px;
-      background: #eef3f8;
-      color: #46647f;
+      background: var(--water-bg);
+      color: var(--water-ink);
       font-size: .86rem;
       font-weight: 650;
     }
@@ -168,7 +240,7 @@
       padding: 5px 11px;
       border: 1px solid var(--line);
       border-radius: 11px;
-      background: white;
+      background: var(--btn-bg);
       color: var(--ink);
     }
 
@@ -195,7 +267,7 @@
       overflow: hidden;
       border: 1px solid var(--line);
       border-radius: 14px;
-      background: #fffdfb;
+      background: var(--surface);
       touch-action: none;
     }
 
@@ -217,7 +289,7 @@
       padding: 7px 30px 7px 10px;
       border: 1px solid var(--line);
       border-radius: 11px;
-      background: white;
+      background: var(--btn-bg);
       color: var(--ink);
     }
 
@@ -225,7 +297,7 @@
     .avg {
       padding: 12px 6px;
       border-radius: 13px;
-      background: #f7eee7;
+      background: var(--soft);
       text-align: center;
     }
 
@@ -248,17 +320,17 @@
       padding: 12px;
       border: 1px solid var(--line);
       border-radius: 13px;
-      background: #fffdfb;
+      background: var(--surface);
     }
 
     .wave-row.water-row {
-      border-color: #cfdcec;
-      background: #f4f8fc;
+      border-color: var(--water-border);
+      background: var(--water-row);
     }
 
     .wave-row.note-row {
-      border-color: #e8dcc4;
-      background: #fdf9f1;
+      border-color: var(--note-border);
+      background: var(--note-bg);
     }
 
     .wave-info, .history-info { min-width: 0; }
@@ -272,21 +344,21 @@
       padding: 6px 10px;
       border: 1px solid var(--line);
       border-radius: 10px;
-      background: white;
+      background: var(--btn-bg);
       color: var(--ink);
       font-size: .84rem;
     }
 
     .delete-button {
-      border-color: #e7c9c1;
-      background: #fff5f2;
-      color: #8b3e31;
+      border-color: var(--danger-border);
+      background: var(--danger-bg);
+      color: var(--danger-ink);
     }
 
     .delete-button.water-delete {
-      border-color: #cfdcec;
-      background: white;
-      color: #46647f;
+      border-color: var(--water-border);
+      background: var(--btn-bg);
+      color: var(--water-ink);
     }
 
     .empty { padding: 12px 0; color: var(--muted); text-align: center; font-size: .9rem; }
@@ -296,16 +368,16 @@
       width: 100%;
       min-height: 50px;
       margin-top: 12px;
-      border: 1px solid #d8b8ae;
+      border: 1px solid var(--danger-border);
       border-radius: 14px;
-      background: #fff5f2;
-      color: #8b3e31;
+      background: var(--danger-bg);
+      color: var(--danger-ink);
       font-weight: 650;
     }
 
     .action-button.secondary {
       border-color: var(--line);
-      background: white;
+      background: var(--btn-bg);
       color: var(--ink);
     }
 
@@ -314,10 +386,10 @@
     .water-button {
       width: 100%;
       min-height: 48px;
-      border: 1px solid #b9cbe0;
+      border: 1px solid var(--water-border);
       border-radius: 13px;
-      background: #eef3f8;
-      color: #46647f;
+      background: var(--water-bg);
+      color: var(--water-ink);
       font-weight: 650;
     }
 
@@ -329,7 +401,7 @@
       padding: 10px 12px;
       border: 1px solid var(--line);
       border-radius: 12px;
-      background: white;
+      background: var(--btn-bg);
       color: var(--ink);
       resize: vertical;
     }
@@ -339,8 +411,8 @@
       padding: 6px 14px;
       border: 1px solid var(--line);
       border-radius: 11px;
-      background: #f7efe2;
-      color: #6d5a33;
+      background: var(--soft);
+      color: var(--ink);
       font-weight: 650;
     }
 
@@ -348,10 +420,31 @@
       margin: 0 0 14px;
       padding: 10px;
       border-radius: 12px;
-      background: #f7eee7;
+      background: var(--soft);
       color: var(--muted);
       font-size: .86rem;
     }
+
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .setting-row + .setting-row { margin-top: 10px; }
+    .setting-row p { margin: 0; font-size: .92rem; }
+
+    .setting-row select, .setting-row input[type="time"] {
+      min-height: 42px;
+      padding: 4px 10px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: var(--btn-bg);
+      color: var(--ink);
+    }
+
+    #themeWindowRow[hidden] { display: none !important; }
 
     dialog {
       width: min(100%, 520px);
@@ -363,7 +456,7 @@
       color: var(--ink);
     }
 
-    dialog::backdrop { background: #342a2788; }
+    dialog::backdrop { background: var(--backdrop); }
 
     .help-head {
       position: sticky;
@@ -383,7 +476,7 @@
       padding: 4px 14px;
       border: 1px solid var(--line);
       border-radius: 10px;
-      background: white;
+      background: var(--btn-bg);
       color: var(--ink);
     }
 
@@ -416,7 +509,7 @@
       margin-top: 16px;
       border: 1px solid var(--line);
       border-radius: 13px;
-      background: white;
+      background: var(--btn-bg);
       color: var(--ink);
       font-weight: 650;
     }
@@ -435,6 +528,7 @@
   <main>
     <header>
       <h1>Wellen-Tracker</h1>
+      <button class="theme-quick" id="themeQuick" type="button" title="Hell/Dunkel umschalten">🌙</button>
     </header>
 
     <div class="viewing-banner" id="viewingBanner" hidden></div>
@@ -545,6 +639,25 @@
     <button class="action-button" id="finishSession" type="button">Messung beenden</button>
     <button class="action-button" id="newSession" type="button">Neue Messung starten</button>
 
+    <h2>Einstellungen</h2>
+    <section class="card">
+      <div class="setting-row">
+        <p>Farbschema</p>
+        <select id="themeMode">
+          <option value="manual">manuell umschalten</option>
+          <option value="window">nach Zeitfenster</option>
+          <option value="os">wie System/Browser</option>
+        </select>
+      </div>
+      <div class="setting-row" id="themeWindowRow" hidden>
+        <p>Dunkel von … bis …</p>
+        <span style="display:flex;gap:6px;align-items:center">
+          <input type="time" id="themeStart" value="20:00">
+          <input type="time" id="themeEnd" value="07:00">
+        </span>
+      </div>
+    </section>
+
     <button class="action-button secondary" id="helpButton" type="button">ℹ️ Anleitung &amp; Hilfe</button>
 
     <p class="note">
@@ -596,6 +709,15 @@
         <li>Über „Öffnen" in der Messungshistorie kannst du alte Messungen ansehen; „Zur aktuellen Messung" bringt dich zurück.</li>
         <li>Das Schließen des Browsers beendet keine laufende Messung – sie läuft beim nächsten Öffnen weiter.</li>
       </ul>
+
+      <h4>Farbschema (hell/dunkel)</h4>
+      <ul>
+        <li><strong>Manuell:</strong> Umschalten über den Mond/Sonne-Button oben rechts oder unter Einstellungen. Das ist der Standard.</li>
+        <li><strong>Zeitfenster:</strong> Dunkel automatisch in einem Zeitraum (z. B. 20:00–07:00, auch über Mitternacht möglich), sonst hell.</li>
+        <li><strong>Wie System/Browser:</strong> Folgt der Hell/Dunkel-Einstellung deines Geräts, auch bei späteren Änderungen.</li>
+        <li>Der Mond/Sonne-Button wirkt in jedem Modus: ein Tipp schaltet sofort um und stellt gleichzeitig auf „manuell" um.</li>
+        <li>Der Wechsel erfolgt weich überblendet statt abrupt.</li>
+      </ul>
     </div>
   </dialog>
 
@@ -617,12 +739,11 @@
       });
 
       /* ==========================================================
-         Wellen-Tracker v7.2
-         Entwickelt von SchrottGott — 09.11.2026
-         v7.2: Kompatibilitäts-Fix – findLast, .at(), replaceAll und
-         ctx.roundRect ersetzt durch überall lauffähige Alternativen.
+         Wellen-Tracker v10
+         Entwickelt von SchrottGott — 11.11.2026
+         v10: Dark Mode (manuell/Zeitfenster/OS) mit sanftem Übergang.
          ========================================================== */
-      var AUTHOR_TAG = "Entwickelt von SchrottGott — Wellen-Tracker v7.2, 2026-11-09";
+      var AUTHOR_TAG = "Entwickelt von SchrottGott — Wellen-Tracker v10, 2026-11-11";
       try { console.info(AUTHOR_TAG); } catch (e) { /* ignoriert */ }
 
       var STORAGE_KEY = "wellen-tracker-sessions-v1";
@@ -662,6 +783,9 @@
       var lastDataEnd = 0;
       var hitTargets = [];
       var touchStart = null;
+
+      /* v10: Theme-Zustand (manuell | window | os) */
+      var theme = { mode: "os", dark: false, start: "20:00", end: "07:00" };
 
       function makeId() {
         return Date.now() + "-" + Math.random().toString(36).slice(2, 9);
@@ -743,6 +867,9 @@
               if (sessions[m].id === currentId) { found = true; break; }
             }
             if (!found) currentId = null;
+
+            /* v10: Theme-Einstellungen mitladen (alte Daten ohne Theme ok) */
+            loadTheme(saved.theme);
           } else {
             /* Übernahme alter Messdaten aus der Vorversion. */
             var old = JSON.parse(localStorage.getItem(OLD_STORAGE_KEY) || "null");
@@ -775,7 +902,11 @@
 
       function save() {
         try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify({ sessions: sessions, currentId: currentId }));
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            sessions: sessions,
+            currentId: currentId,
+            theme: theme
+          }));
         } catch (err) {
           $("hint").textContent = "Der Browser konnte die Messung nicht speichern.";
         }
@@ -855,6 +986,87 @@
           .split("&").join("&amp;")
           .split("<").join("&lt;")
           .split(">").join("&gt;");
+      }
+
+      /* ===================== Theme (v10) ===================== */
+
+      var LIGHT_THEME_COLOR = "#f6eee7";
+      var DARK_THEME_COLOR = "#1c1714";
+
+      function minutesOf(hhmm) {
+        var parts = String(hhmm || "").split(":");
+        var h = parseInt(parts[0], 10), m = parseInt(parts[1], 10);
+        if (!isFinite(h) || !isFinite(m)) return null;
+        return h * 60 + m;
+      }
+
+      function inWindow(now) {
+        var cur = now.getHours() * 60 + now.getMinutes();
+        var s = minutesOf(theme.start), e = minutesOf(theme.end);
+        if (s === null || e === null || s === e) return false;
+        return s < e ? (cur >= s && cur < e) : (cur >= s || cur < e);
+      }
+
+      var osDarkQuery = window.matchMedia
+        ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+
+      function themeShouldBeDark(now) {
+        if (theme.mode === "os") return osDarkQuery ? osDarkQuery.matches : false;
+        if (theme.mode === "window") return inWindow(now);
+        return theme.dark;
+      }
+
+      function loadTheme(raw) {
+        if (!raw || typeof raw !== "object") return;
+        if (raw.mode === "manual" || raw.mode === "window" || raw.mode === "os") {
+          theme.mode = raw.mode;
+        }
+        theme.dark = !!raw.dark;
+        if (typeof raw.start === "string" && /^\d{2}:\d{2}$/.test(raw.start)) theme.start = raw.start;
+        if (typeof raw.end === "string" && /^\d{2}:\d{2}$/.test(raw.end)) theme.end = raw.end;
+      }
+
+      function applyTheme(forceRedraw) {
+        var dark = themeShouldBeDark(new Date());
+        document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+        $("metaThemeColor").setAttribute("content", dark ? DARK_THEME_COLOR : LIGHT_THEME_COLOR);
+        $("themeQuick").textContent = dark ? "☀️" : "🌙";
+        $("themeQuick").title = dark ? "Helles Design aktivieren" : "Dunkles Design aktivieren";
+        if (forceRedraw) drawGraph(Date.now());
+      }
+
+      function setThemeMode(mode) {
+        theme.mode = mode;
+        if (mode === "manual") {
+          theme.dark = document.documentElement.getAttribute("data-theme") === "dark";
+        }
+        $("themeMode").value = mode;
+        $("themeWindowRow").hidden = mode !== "window";
+        applyTheme(true);
+        save();
+      }
+
+      $("themeQuick").addEventListener("click", function () {
+        var dark = document.documentElement.getAttribute("data-theme") === "dark";
+        theme.mode = "manual";
+        theme.dark = !dark;
+        $("themeMode").value = "manual";
+        $("themeWindowRow").hidden = true;
+        applyTheme(true);
+        save();
+      });
+
+      $("themeMode").addEventListener("change", function () { setThemeMode($("themeMode").value); });
+      $("themeStart").addEventListener("change", function () {
+        theme.start = $("themeStart").value; applyTheme(true); save();
+      });
+      $("themeEnd").addEventListener("change", function () {
+        theme.end = $("themeEnd").value; applyTheme(true); save();
+      });
+      if (osDarkQuery) {
+        var osHandler = function () { if (theme.mode === "os") applyTheme(true); };
+        if (osDarkQuery.addEventListener) osDarkQuery.addEventListener("change", osHandler);
+        else if (osDarkQuery.addListener) osDarkQuery.addListener(osHandler);
       }
 
       function renderCurrent(now) {
@@ -1128,45 +1340,45 @@
             render();
           });
         }
-		
-		var delButtons = list.querySelectorAll("[data-del]");
+
+        var delButtons = list.querySelectorAll("[data-del]");
         for (var k = 0; k < delButtons.length; k++) {
           delButtons[k].addEventListener("click", function () {
             deleteHistory(this.getAttribute("data-del"));
           });
         }
       }
-	  
-	  function deleteHistory(id) {
-		var session = null;
-		for (var i = 0; i < sessions.length; i++) {
-		  if (sessions[i].id === id) { session = sessions[i]; break; }
-		}
-		if (!session) return;
 
-		var isCurrent = session.id === currentId;
-		if (!confirm("Diese Messung (Beginn " + dateTime(session.startedAt) + ") endgültig löschen? Dies kann nicht rückgängig gemacht werden.")) {
-		  return;
-		}
+      function deleteHistory(id) {
+        var session = null;
+        for (var i = 0; i < sessions.length; i++) {
+          if (sessions[i].id === id) { session = sessions[i]; break; }
+        }
+        if (!session) return;
 
-		var kept = [];
-		for (var j = 0; j < sessions.length; j++) {
-		  if (sessions[j].id !== id) kept.push(sessions[j]);
-		}
-		sessions = kept;
+        var isCurrent = session.id === currentId;
+        if (!confirm("Diese Messung (Beginn " + dateTime(session.startedAt) + ") endgültig löschen? Dies kann nicht rückgängig gemacht werden.")) {
+          return;
+        }
 
-		if (isCurrent) {
-		  if (!sessions.length) {
-			var fresh = makeSession();
-			sessions.push(fresh);
-		  }
-		  currentId = sessions[sessions.length - 1].id;
-		}
-		if (selectedId === id) selectedId = currentId;
+        var kept = [];
+        for (var j = 0; j < sessions.length; j++) {
+          if (sessions[j].id !== id) kept.push(sessions[j]);
+        }
+        sessions = kept;
 
-		save();
-		render();
-	  }
+        if (isCurrent) {
+          if (!sessions.length) {
+            var fresh = makeSession();
+            sessions.push(fresh);
+          }
+          currentId = sessions[sessions.length - 1].id;
+        }
+        if (selectedId === id) selectedId = currentId;
+
+        save();
+        render();
+      }
 
       function deleteWave(start) {
         var session = activeSession();
@@ -1351,7 +1563,27 @@
         ctx.closePath();
       }
 
+      /* v10: Canvas-Farben aus dem aktuellen Theme lesen */
+      function themeColors() {
+        var cs = getComputedStyle(document.documentElement);
+        function get(name, fallback) {
+          var value = cs.getPropertyValue(name).trim();
+          return value || fallback;
+        }
+        return {
+          bg: get("--surface", "#fffdfb"),
+          track: get("--track", "#f0e7e0"),
+          grid: get("--line", "#eee4dc"),
+          text: get("--muted", "#796b65"),
+          wave: get("--wave", "#bd6553"),
+          pause: get("--pause", "#d9b989"),
+          water: get("--water", "#7d9bb8"),
+          note: get("--note", "#a3814f")
+        };
+      }
+
       function drawGraph(now) {
+        var tc = themeColors();
         var session = selectedSession();
         var segments = session ? session.segments : [];
         var rect = canvas.getBoundingClientRect();
@@ -1360,13 +1592,13 @@
         if (!w || !h) return;
 
         ctx.clearRect(0, 0, w, h);
-        ctx.fillStyle = "#fffdfb";
+        ctx.fillStyle = tc.bg;
         ctx.fillRect(0, 0, w, h);
 
         hitTargets = [];
 
         if (!segments.length) {
-          ctx.fillStyle = "#796b65";
+          ctx.fillStyle = tc.text;
           ctx.font = "14px system-ui, sans-serif";
           ctx.textAlign = "center";
           ctx.fillText("Dein Verlauf erscheint hier", w / 2, h / 2);
@@ -1405,9 +1637,9 @@
           return padL + ((time - left) / actualSpan) * chartW;
         }
 
-        ctx.strokeStyle = "#eee4dc";
+        ctx.strokeStyle = tc.grid;
         ctx.lineWidth = 1;
-        ctx.fillStyle = "#796b65";
+        ctx.fillStyle = tc.text;
         ctx.font = "11px system-ui, sans-serif";
         ctx.textAlign = "center";
 
@@ -1423,7 +1655,7 @@
           ctx.fillText(axisLabel(timeMode, time - first, time), x, 155);
         }
 
-        ctx.fillStyle = "#f0e7e0";
+        ctx.fillStyle = tc.track;
         roundRectPath(padL, y, chartW, barH, 9);
         ctx.fill();
 
@@ -1438,7 +1670,7 @@
           var x2 = mapX(end);
           if (x2 < padL || x1 > w - padR) continue;
 
-          ctx.fillStyle = segment.type === "wave" ? "#bd6553" : "#d9b989";
+          ctx.fillStyle = segment.type === "wave" ? tc.wave : tc.pause;
           ctx.fillRect(x1, y, Math.max(2, x2 - x1), barH);
         }
         ctx.restore();
@@ -1452,7 +1684,7 @@
             if (wx < padL || wx > w - padR) continue;
 
             ctx.save();
-            ctx.strokeStyle = "#8aa9c6";
+            ctx.strokeStyle = tc.water;
             ctx.lineWidth = 2;
             ctx.setLineDash([5, 4]);
             ctx.beginPath();
@@ -1461,7 +1693,7 @@
             ctx.stroke();
             ctx.restore();
 
-            ctx.fillStyle = "#7d9bb8";
+            ctx.fillStyle = tc.water;
             ctx.font = "bold 10px system-ui, sans-serif";
             ctx.textAlign = "center";
             ctx.fillText("BS", wx, y - 13);
@@ -1487,12 +1719,12 @@
             var nx = mapX(nEvent.at);
             if (nx < padL || nx > w - padR) continue;
 
-            ctx.fillStyle = "#a3814f";
+            ctx.fillStyle = tc.note;
             ctx.beginPath();
             ctx.arc(nx, y + barH + 12, 4, 0, Math.PI * 2);
             ctx.fill();
 
-            ctx.fillStyle = "#7a6a52";
+            ctx.fillStyle = tc.text;
             ctx.textAlign = "left";
             ctx.fillText("N" + (ni + 1), nx + 7, y + barH + 16);
 
@@ -1507,7 +1739,7 @@
           }
         }
 
-        ctx.fillStyle = "#796b65";
+        ctx.fillStyle = tc.text;
         ctx.font = "11px system-ui, sans-serif";
         ctx.textAlign = "left";
         ctx.fillText(
@@ -1525,6 +1757,7 @@
 
         var i, target, distance;
 
+        /* Blasensprünge: nur obere Hälfte (deine 75-px-Regel) */
         for (i = 0; i < hitTargets.length; i++) {
           target = hitTargets[i];
           if (target.type !== "water") continue;
@@ -1534,6 +1767,7 @@
           }
         }
 
+        /* Notizen: nur untere Hälfte */
         for (i = 0; i < hitTargets.length; i++) {
           target = hitTargets[i];
           if (target.type !== "note") continue;
@@ -1595,62 +1829,62 @@
 
       /* ---------- Ereignisse ---------- */
 
-	  $("toggle").addEventListener("click", function () {
-	  /* Fall A: Es wird eine alte (nicht aktive) Messung angezeigt.
-		 Der Tipp auf "Welle starten" macht sie JETZT zur aktiven
-		 Messung und startet darin die neue Welle. */
-	    if (selectedId !== currentId) {
-		  if (!confirm("Diese gespeicherte Messung zur aktiven Messung machen und hier eine neue Welle starten? Die bisher aktive Messung wird dabei beendet.")) {
-		  return;
-		  }
+      $("toggle").addEventListener("click", function () {
+        /* Fall A: Es wird eine alte (nicht aktive) Messung angezeigt.
+           Der Tipp auf "Welle starten" macht sie JETZT zur aktiven
+           Messung und startet darin die neue Welle. */
+        if (selectedId !== currentId) {
+          if (!confirm("Diese gespeicherte Messung zur aktiven Messung machen und hier eine neue Welle starten? Die bisher aktive Messung wird dabei beendet.")) {
+            return;
+          }
 
-		  var now = Date.now();
+          var now = Date.now();
 
-		/* Bisher aktive Messung sauber abschließen (falls offen). */
-		  var oldActive = activeSession();
-		    if (oldActive && !oldActive.finished) {
-		    closeOpenSegment(oldActive, now);
-		    oldActive.finished = true;
-		    oldActive.endedAt = now;
-		  }
+          /* Bisher aktive Messung sauber abschließen (falls offen). */
+          var oldActive = activeSession();
+          if (oldActive && !oldActive.finished) {
+            closeOpenSegment(oldActive, now);
+            oldActive.finished = true;
+            oldActive.endedAt = now;
+          }
 
-		/* Angezeigte Messung übernehmen und direkt weiterführen.
-		   Der Beendet-Status fällt, die neue Welle beginnt jetzt. */
-		  currentId = selectedId;
-		  var session = selectedSession();
-		  session.finished = false;
-		  session.endedAt = null;
-		  session.segments.push({ type: "wave", start: now, end: null });
+          /* Angezeigte Messung übernehmen und direkt weiterführen.
+             Der Beendet-Status fällt, die neue Welle beginnt jetzt. */
+          currentId = selectedId;
+          var session = selectedSession();
+          session.finished = false;
+          session.endedAt = null;
+          session.segments.push({ type: "wave", start: now, end: null });
 
-		  viewRight = null;
-		  save();
-		  render();
-		  return;
-	    }
+          viewRight = null;
+          save();
+          render();
+          return;
+        }
 
-	  /* Fall B: Normales Verhalten in der aktiven Messung. */
-	  var session = activeSession();
-	  if (!session) return;
+        /* Fall B: Normales Verhalten in der aktiven Messung. */
+        var session = activeSession();
+        if (!session) return;
 
-	  var now = Date.now();
-	  var active = findLastMatch(session.segments, function (s) { return s.end === null; });
+        var now = Date.now();
+        var active = findLastMatch(session.segments, function (s) { return s.end === null; });
 
-	  if (!active) {
-		session.finished = false;
-		session.endedAt = null;
-		session.segments.push({ type: "wave", start: now, end: null });
-	  } else if (active.type === "wave") {
-		active.end = now;
-		session.segments.push({ type: "pause", start: now, end: null });
-	  } else {
-		active.end = now;
-		session.segments.push({ type: "wave", start: now, end: null });
-	  }
+        if (!active) {
+          session.finished = false;
+          session.endedAt = null;
+          session.segments.push({ type: "wave", start: now, end: null });
+        } else if (active.type === "wave") {
+          active.end = now;
+          session.segments.push({ type: "pause", start: now, end: null });
+        } else {
+          active.end = now;
+          session.segments.push({ type: "wave", start: now, end: null });
+        }
 
-	  viewRight = null;
-	  save();
-	  render();
-	});
+        viewRight = null;
+        save();
+        render();
+      });
 
       $("averageWindow").addEventListener("change", render);
       $("addWater").addEventListener("click", addWater);
@@ -1810,11 +2044,20 @@
         render();
       });
 
+      /* v10: Sofortspeichern beim Verbergen/Schließen der Seite/App */
+      document.addEventListener("visibilitychange", function () {
+        if (document.visibilityState === "hidden") save();
+      });
+      window.addEventListener("pagehide", save);
+      window.addEventListener("beforeunload", save);
+
       window.addEventListener("resize", resizeCanvas);
 
       load();
+      applyTheme(false);          // v10-Nachtrag: gespeichertes Theme beim Start anwenden
       resizeCanvas();
       render();
+
       window.setInterval(render, 500);
     })();
   </script>
